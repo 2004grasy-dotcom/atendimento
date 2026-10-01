@@ -158,23 +158,49 @@ app.get('/api/leads', (req, res) => {
 
 app.post('/api/leads', async (req, res) => {
   try {
-    const { answers, sessionId } = req.body;
-    if (!answers || Object.keys(answers).length === 0) {
-      return res.status(400).json({ error: 'Respostas vazias' });
+    const { answers, sessionId, etapaAtual, clicouCadastro, clicouWhatsapp, chegouAoFim } = req.body;
+    if (!answers && !etapaAtual) {
+      return res.status(400).json({ error: 'Dados vazios' });
     }
 
     const leads = readJSON(LEADS_FILE, []);
-    const newLead = {
-      id: 'lead_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
-      sessionId: sessionId || 'sess_' + Date.now(),
-      createdAt: new Date().toISOString(),
-      name: answers.nome || answers.name || 'Anônimo',
-      whatsapp: answers.whatsapp || answers.telefone || answers.phone || '',
-      email: answers.email || '',
-      answers: answers
-    };
+    const sess = sessionId || ('sess_' + Date.now());
+    let lead = leads.find(l => l.sessionId === sess);
+    const now = new Date().toISOString();
 
-    leads.unshift(newLead);
+    if (lead) {
+      lead.updatedAt = now;
+      lead.answers = { ...(lead.answers || {}), ...(answers || {}) };
+
+      if (etapaAtual) lead.etapaAtual = etapaAtual;
+      else if (lead.answers.etapa_atual) lead.etapaAtual = lead.answers.etapa_atual;
+
+      if (clicouCadastro || lead.answers.clicou_cadastro) lead.clicouCadastro = true;
+      if (clicouWhatsapp || lead.answers.clicou_whatsapp) lead.clicouWhatsapp = true;
+      if (chegouAoFim || lead.answers.chegou_ao_fim) lead.chegouAoFim = true;
+
+      if (lead.answers.nome || lead.answers.name) lead.name = lead.answers.nome || lead.answers.name;
+      if (lead.answers.whatsapp || lead.answers.telefone) lead.whatsapp = lead.answers.whatsapp || lead.answers.telefone;
+      if (lead.answers.email) lead.email = lead.answers.email;
+    } else {
+      const isAnon = !(answers && (answers.nome || answers.name));
+      lead = {
+        id: 'lead_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+        sessionId: sess,
+        createdAt: now,
+        updatedAt: now,
+        name: isAnon ? ('Visitante #' + sess.slice(-5)) : (answers.nome || answers.name),
+        whatsapp: (answers && (answers.whatsapp || answers.telefone || answers.phone)) || '',
+        email: (answers && answers.email) || '',
+        etapaAtual: etapaAtual || (answers && answers.etapa_atual) || 'Iniciou Atendimento',
+        clicouCadastro: !!(clicouCadastro || (answers && answers.clicou_cadastro)),
+        clicouWhatsapp: !!(clicouWhatsapp || (answers && answers.clicou_whatsapp)),
+        chegouAoFim: !!(chegouAoFim || (answers && answers.chegou_ao_fim)),
+        answers: answers || {}
+      };
+      leads.unshift(lead);
+    }
+
     writeJSON(LEADS_FILE, leads);
 
     // Disparo opcional de webhook (ex: n8n, zapier, evolution api)
@@ -185,14 +211,14 @@ app.post('/api/leads', async (req, res) => {
         fetch(webhookUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newLead)
+          body: JSON.stringify(lead)
         }).catch(err => console.error('Erro no webhook disparado:', err.message));
       } catch (e) {
         console.error('Falha ao enviar webhook:', e.message);
       }
     }
 
-    res.status(201).json({ success: true, lead: newLead });
+    res.status(200).json({ success: true, lead });
   } catch (err) {
     console.error('Erro ao salvar lead:', err);
     res.status(500).json({ error: 'Erro interno ao salvar lead.' });
@@ -213,22 +239,27 @@ app.delete('/api/leads/:id', (req, res) => {
   res.json({ success: true, message: 'Lead excluído com sucesso' });
 });
 
-// Exportação CSV
+// Exportação CSV detalhada
 app.get('/api/export/csv', (req, res) => {
   const leads = readJSON(LEADS_FILE, []);
-  let csvContent = '\uFEFFData,Nome,WhatsApp,Email,Respostas Detalhadas\n';
+  let csvContent = '\uFEFFData Início,Última Atividade,Visitante,WhatsApp,Email,Etapa Atual,Clicou Cadastrar?,Chamou WhatsApp?,Chegou ao Fim?,Respostas Detalhadas\n';
 
   leads.forEach(l => {
-    const dataFormatted = new Date(l.createdAt).toLocaleString('pt-BR');
+    const dataInicio = new Date(l.createdAt).toLocaleString('pt-BR');
+    const dataUpdate = l.updatedAt ? new Date(l.updatedAt).toLocaleString('pt-BR') : dataInicio;
     const safeName = `"${(l.name || '').replace(/"/g, '""')}"`;
     const safeZap = `"${(l.whatsapp || '').replace(/"/g, '""')}"`;
     const safeEmail = `"${(l.email || '').replace(/"/g, '""')}"`;
-    const safeAnswers = `"${JSON.stringify(l.answers).replace(/"/g, '""')}"`;
-    csvContent += `${dataFormatted},${safeName},${safeZap},${safeEmail},${safeAnswers}\n`;
+    const safeEtapa = `"${(l.etapaAtual || '').replace(/"/g, '""')}"`;
+    const safeCad = l.clicouCadastro ? '"SIM"' : '"Não"';
+    const safeZapClick = l.clicouWhatsapp ? '"SIM"' : '"Não"';
+    const safeFim = l.chegouAoFim ? '"SIM"' : '"Não"';
+    const safeAnswers = `"${JSON.stringify(l.answers || {}).replace(/"/g, '""')}"`;
+    csvContent += `${dataInicio},${dataUpdate},${safeName},${safeZap},${safeEmail},${safeEtapa},${safeCad},${safeZapClick},${safeFim},${safeAnswers}\n`;
   });
 
   res.header('Content-Type', 'text/csv; charset=utf-8');
-  res.attachment(`leads-typebot-${Date.now()}.csv`);
+  res.attachment(`funil-atendimento-${Date.now()}.csv`);
   res.send(csvContent);
 });
 

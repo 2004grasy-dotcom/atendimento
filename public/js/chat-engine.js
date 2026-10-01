@@ -4,7 +4,14 @@ class TypebotChat {
     this.flow = null;
     this.currentStepId = null;
     this.answers = {};
-    this.sessionId = 'sess_' + Math.random().toString(36).substring(2, 9);
+
+    let storedSession = sessionStorage.getItem('typebot_session_id');
+    if (!storedSession) {
+      storedSession = 'sess_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 7);
+      sessionStorage.setItem('typebot_session_id', storedSession);
+    }
+    this.sessionId = storedSession;
+
     this.chatContainer = document.getElementById('chat-messages');
     this.inputArea = document.getElementById('input-area');
     this.inputForm = document.getElementById('input-form');
@@ -98,7 +105,9 @@ class TypebotChat {
     }
 
     this.chatContainer.innerHTML = '';
-    this.answers = {};
+    this.answers = { etapa_atual: 'Iniciou Atendimento' };
+    this.saveLead();
+
     if (!this.flow || !this.flow.steps || this.flow.steps.length === 0) {
       this.showSystemMessage('Nenhum passo configurado no fluxo.');
       return;
@@ -111,9 +120,11 @@ class TypebotChat {
     sessionStorage.removeItem('typebot_history_html');
     sessionStorage.removeItem('typebot_answers');
     sessionStorage.removeItem('typebot_current_step');
-    this.sessionId = 'sess_' + Math.random().toString(36).substring(2, 9);
+    this.sessionId = 'sess_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 7);
+    sessionStorage.setItem('typebot_session_id', this.sessionId);
     this.chatContainer.innerHTML = '';
-    this.answers = {};
+    this.answers = { etapa_atual: 'Reiniciou Atendimento' };
+    this.saveLead();
     const firstStep = this.flow && this.flow.steps && this.flow.steps[0];
     if (firstStep) this.executeStep(firstStep.id);
   }
@@ -403,12 +414,17 @@ class TypebotChat {
           <svg class="w-4 h-4 text-emerald-600 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
         `;
         btn.addEventListener('click', () => {
-          window.open(opt.url, '_blank');
-          optionsContainer.remove();
-          this.renderUserMessage(opt.label);
+          this.answers['clicou_cadastro'] = true;
+          this.answers['etapa_atual'] = '🔥 Clicou em Cadastrar (' + opt.label + ')';
+          this.answers['ultimo_clique'] = opt.label;
           if (step.variable) {
             this.answers[step.variable] = opt.label;
           }
+          this.saveLead();
+
+          window.open(opt.url, '_blank');
+          optionsContainer.remove();
+          this.renderUserMessage(opt.label);
           const nextId = opt.nextStepId || step.nextStepId;
           if (nextId) {
             setTimeout(() => this.executeStep(nextId), 600);
@@ -420,11 +436,14 @@ class TypebotChat {
           <svg class="w-4 h-4 text-gray-400 opacity-60 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
         `;
         btn.addEventListener('click', () => {
+          const varKey = step.variable || ('escolha_' + (step.id || 'btn'));
+          this.answers[varKey] = opt.label;
+          this.answers['etapa_atual'] = 'Avançou: ' + opt.label;
+          this.answers['ultimo_clique'] = opt.label;
+          this.saveLead();
+
           optionsContainer.remove();
           this.renderUserMessage(opt.label);
-          if (step.variable) {
-            this.answers[step.variable] = opt.label;
-          }
           const nextId = opt.nextStepId || step.nextStepId;
           if (nextId) {
             setTimeout(() => this.executeStep(nextId), 400);
@@ -455,6 +474,8 @@ class TypebotChat {
         if (step.variable) {
           this.answers[step.variable] = `${star} estrelas`;
         }
+        this.answers['etapa_atual'] = `Avaliou com ${star} estrelas`;
+        this.saveLead();
         if (step.nextStepId) {
           setTimeout(() => this.executeStep(step.nextStepId), 500);
         }
@@ -473,6 +494,11 @@ class TypebotChat {
 
     const waLink = `https://wa.me/${zapNumber}?text=${encodeURIComponent(customText)}`;
 
+    // Registra no painel que o cliente concluiu todas as etapas e chegou ao fim
+    this.answers['chegou_ao_fim'] = true;
+    this.answers['etapa_atual'] = '🏆 Chegou ao final do funil';
+    this.saveLead();
+
     const ctaContainer = document.createElement('div');
     ctaContainer.className = 'pl-10 pr-2 my-4 animate-pop-in';
     ctaContainer.innerHTML = `
@@ -484,6 +510,15 @@ class TypebotChat {
         Clique para ser atendido(a) diretamente pelo nosso WhatsApp
       </div>
     `;
+
+    const zapLinkEl = ctaContainer.querySelector('a');
+    if (zapLinkEl) {
+      zapLinkEl.addEventListener('click', () => {
+        this.answers['clicou_whatsapp'] = true;
+        this.answers['etapa_atual'] = '💬 Chamou no WhatsApp';
+        this.saveLead();
+      });
+    }
 
     this.chatContainer.appendChild(ctaContainer);
     this.scrollToBottom();
@@ -537,6 +572,7 @@ class TypebotChat {
     // Salva resposta
     const variableName = step.variable || (step.type === 'input_name' ? 'nome' : 'resposta');
     this.answers[variableName] = rawVal;
+    this.answers['etapa_atual'] = 'Respondeu: ' + variableName;
 
     this.renderUserMessage(rawVal);
     this.hideInput();
@@ -549,14 +585,22 @@ class TypebotChat {
     }
   }
 
-  async saveLead() {
+  async saveLead(extra = {}) {
     try {
+      if (extra && typeof extra === 'object') {
+        Object.assign(this.answers, extra);
+      }
+      this.saveStateToStorage();
       await fetch('/api/leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sessionId: this.sessionId,
-          answers: this.answers
+          answers: this.answers,
+          etapaAtual: this.answers.etapa_atual || 'Iniciou Atendimento',
+          clicouCadastro: !!this.answers.clicou_cadastro,
+          clicouWhatsapp: !!this.answers.clicou_whatsapp,
+          chegouAoFim: !!this.answers.chegou_ao_fim
         })
       });
     } catch (err) {

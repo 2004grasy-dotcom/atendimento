@@ -490,19 +490,28 @@ function renderLeadsTable() {
   tbody.innerHTML = '';
 
   const total = currentLeads.length;
-  const withZap = currentLeads.filter(l => l.whatsapp).length;
-  const withEmail = currentLeads.filter(l => l.email).length;
+  const cadastros = currentLeads.filter(l => l.clicouCadastro || (l.answers && l.answers.clicou_cadastro)).length;
+  const finalizados = currentLeads.filter(l => l.chegouAoFim || (l.answers && l.answers.chegou_ao_fim)).length;
+  const zapClicks = currentLeads.filter(l => l.clicouWhatsapp || (l.answers && l.answers.clicou_whatsapp)).length;
+  const avancaram = currentLeads.filter(l => {
+    if (l.clicouCadastro || l.chegouAoFim || l.clicouWhatsapp) return true;
+    if (!l.answers) return false;
+    const ansKeys = Object.keys(l.answers).filter(k => !['etapa_atual'].includes(k));
+    return ansKeys.length > 0;
+  }).length;
 
-  document.getElementById('stat-total-leads').textContent = total;
-  document.getElementById('stat-whatsapp-leads').textContent = withZap;
-  document.getElementById('stat-email-leads').textContent = withEmail;
-  document.getElementById('leads-badge').textContent = total;
+  if (document.getElementById('stat-total-leads')) document.getElementById('stat-total-leads').textContent = total;
+  if (document.getElementById('stat-avancaram-leads')) document.getElementById('stat-avancaram-leads').textContent = avancaram;
+  if (document.getElementById('stat-cadastro-leads')) document.getElementById('stat-cadastro-leads').textContent = cadastros;
+  if (document.getElementById('stat-fim-leads')) document.getElementById('stat-fim-leads').textContent = finalizados;
+  if (document.getElementById('stat-whatsapp-leads')) document.getElementById('stat-whatsapp-leads').textContent = zapClicks;
+  if (document.getElementById('leads-badge')) document.getElementById('leads-badge').textContent = total;
 
   if (total === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="6" class="px-5 py-8 text-center text-gray-400">
-          Nenhum lead coletado até o momento. Teste seu bot no simulador ou compartilhe o link!
+        <td colspan="7" class="px-5 py-8 text-center text-gray-400">
+          Nenhum visitante registrado ainda. Quando alguém interagir com o bot, os passos aparecerão aqui em tempo real!
         </td>
       </tr>
     `;
@@ -513,26 +522,62 @@ function renderLeadsTable() {
     const tr = document.createElement('tr');
     tr.className = 'hover:bg-slate-50 transition-colors';
 
-    const formattedDate = new Date(lead.createdAt).toLocaleString('pt-BR');
+    const dInicio = new Date(lead.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + ' (' + new Date(lead.createdAt).toLocaleDateString('pt-BR') + ')';
+    const dUpdate = lead.updatedAt && lead.updatedAt !== lead.createdAt
+      ? new Date(lead.updatedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+      : null;
+
+    const hasCadastro = !!(lead.clicouCadastro || (lead.answers && lead.answers.clicou_cadastro));
+    const hasWhatsapp = !!(lead.clicouWhatsapp || (lead.answers && lead.answers.clicou_whatsapp));
+    const hasFim = !!(lead.chegouAoFim || (lead.answers && lead.answers.chegou_ao_fim));
+
+    let etapaBadge = '';
+    if (hasCadastro) {
+      etapaBadge = '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">🔥 Clicou em Cadastrar</span>';
+    } else if (hasWhatsapp) {
+      etapaBadge = '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800 border border-green-300">💬 Chamou no WhatsApp</span>';
+    } else if (hasFim) {
+      etapaBadge = '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-300">🏆 Chegou ao Fim</span>';
+    } else {
+      const etapaTxt = escapeHtml(lead.etapaAtual || 'Iniciou Atendimento');
+      etapaBadge = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">${etapaTxt}</span>`;
+    }
+
     const zapNumber = (lead.whatsapp || '').replace(/\D/g, '');
-    const waLink = zapNumber ? `https://wa.me/55${zapNumber}?text=Olá%20${encodeURIComponent(lead.name || '')}` : null;
+    const waLink = zapNumber ? `https://wa.me/55${zapNumber}` : null;
 
     tr.innerHTML = `
-      <td class="px-5 py-3.5 whitespace-nowrap text-xs text-gray-500 font-mono">${formattedDate}</td>
-      <td class="px-5 py-3.5 font-semibold text-gray-900">${escapeHtml(lead.name || 'Anônimo')}</td>
-      <td class="px-5 py-3.5 whitespace-nowrap">
-        ${lead.whatsapp ? `
-          <a href="${waLink}" target="_blank" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-medium text-xs border border-emerald-200">
-            <span>💬 ${escapeHtml(lead.whatsapp)}</span>
-          </a>
-        ` : '<span class="text-gray-400 text-xs">-</span>'}
+      <td class="px-5 py-3.5 whitespace-nowrap text-xs text-gray-500 font-mono">
+        <div>${dInicio}</div>
+        ${dUpdate ? `<div class="text-[10px] text-gray-400">Última ação: ${dUpdate}</div>` : ''}
       </td>
-      <td class="px-5 py-3.5 text-xs text-gray-600">${escapeHtml(lead.email || '-')}</td>
-      <td class="px-5 py-3.5 text-xs text-gray-600 max-w-xs truncate" title='${escapeHtml(JSON.stringify(lead.answers, null, 2))}'>
+      <td class="px-5 py-3.5">
+        <div class="font-bold text-gray-900 text-xs sm:text-sm">${escapeHtml(lead.name || 'Visitante')}</div>
+        <div class="text-[11px] text-gray-400 font-mono">${escapeHtml(lead.sessionId || '')}</div>
+        ${lead.whatsapp ? `
+          <a href="${waLink}" target="_blank" class="inline-flex items-center gap-1 text-[11px] text-emerald-700 font-semibold hover:underline mt-0.5">
+            💬 ${escapeHtml(lead.whatsapp)}
+          </a>
+        ` : ''}
+      </td>
+      <td class="px-5 py-3.5 whitespace-nowrap">
+        ${etapaBadge}
+      </td>
+      <td class="px-5 py-3.5 text-center whitespace-nowrap">
+        ${hasCadastro 
+          ? '<span class="inline-block px-2.5 py-1 text-xs font-black rounded-lg bg-emerald-500 text-white shadow-xs">SIM 🔥</span>' 
+          : '<span class="text-xs text-gray-400 font-medium">Não</span>'}
+      </td>
+      <td class="px-5 py-3.5 text-center whitespace-nowrap">
+        ${hasWhatsapp 
+          ? '<span class="inline-block px-2.5 py-1 text-xs font-black rounded-lg bg-emerald-600 text-white shadow-xs">SIM 💬</span>' 
+          : '<span class="text-xs text-gray-400 font-medium">Não</span>'}
+      </td>
+      <td class="px-5 py-3.5 text-xs text-gray-700 max-w-sm">
         ${renderAnswersSummary(lead.answers)}
       </td>
       <td class="px-5 py-3.5 text-right whitespace-nowrap">
-        <button onclick="deleteLead('${lead.id}')" class="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50" title="Excluir">
+        <button onclick="deleteLead('${lead.id}')" class="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50 transition-colors" title="Excluir este registro">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
         </button>
       </td>
@@ -543,11 +588,29 @@ function renderLeadsTable() {
 }
 
 function renderAnswersSummary(answers) {
-  if (!answers) return '-';
-  const keys = Object.keys(answers).filter(k => !['nome', 'name', 'whatsapp', 'telefone', 'email'].includes(k));
-  if (keys.length === 0) return '<span class="text-gray-400">Dados básicos</span>';
-  return keys.map(k => `<strong>${k}:</strong> ${answers[k]}`).join(' | ');
+  if (!answers || Object.keys(answers).length === 0) return '<span class="text-gray-400 italic">Nenhuma escolha ainda</span>';
+  const ignoredKeys = ['etapa_atual', 'clicou_cadastro', 'clicou_whatsapp', 'chegou_ao_fim', 'nome', 'name', 'whatsapp', 'telefone', 'email', 'ultimo_clique'];
+  const keys = Object.keys(answers).filter(k => !ignoredKeys.includes(k));
+  if (keys.length === 0) {
+    if (answers.ultimo_clique) {
+      return `<span class="inline-block px-2 py-0.5 rounded-md bg-gray-100 text-gray-700 text-xs font-medium">👉 ${escapeHtml(answers.ultimo_clique)}</span>`;
+    }
+    return '<span class="text-gray-400 italic">Iniciou conversa</span>';
+  }
+  return keys.map(k => {
+    const val = answers[k];
+    const cleanKey = k.replace(/^step_opt_/, '').replace(/^step_/, '').replace(/^opt_/, '').replace(/^escolha_/, '');
+    return `<span class="inline-block px-2 py-0.5 m-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-medium"><strong>${escapeHtml(cleanKey)}:</strong> ${escapeHtml(String(val))}</span>`;
+  }).join(' ');
 }
+
+// Auto-refresh a cada 8 segundos caso esteja no painel de leads
+setInterval(() => {
+  const leadsTab = document.getElementById('section-leads');
+  if (leadsTab && !leadsTab.classList.contains('hidden')) {
+    loadLeads();
+  }
+}, 8000);
 
 async function deleteLead(leadId) {
   if (confirm('Deseja excluir este registro de lead?')) {
