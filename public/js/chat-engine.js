@@ -77,6 +77,26 @@ class TypebotChat {
   }
 
   startConversation() {
+    // Tenta restaurar estado anterior para evitar reset acidental
+    const savedHtml = sessionStorage.getItem('typebot_history_html');
+    const savedAnswers = sessionStorage.getItem('typebot_answers');
+    const savedStep = sessionStorage.getItem('typebot_current_step');
+
+    if (savedHtml && savedStep) {
+      try {
+        this.chatContainer.innerHTML = savedHtml;
+        this.answers = savedAnswers ? JSON.parse(savedAnswers) : {};
+        this.currentStepId = savedStep;
+        this.scrollToBottom();
+        // Se o passo atual ainda precisa de input do usuário, exibe
+        const step = this.getStepById(savedStep);
+        if (step && ['input_text', 'input_name', 'input_email', 'input_phone'].includes(step.type)) {
+          this.showTextInput(step);
+        }
+        return;
+      } catch (e) {}
+    }
+
     this.chatContainer.innerHTML = '';
     this.answers = {};
     if (!this.flow || !this.flow.steps || this.flow.steps.length === 0) {
@@ -88,8 +108,14 @@ class TypebotChat {
   }
 
   restartConversation() {
+    sessionStorage.removeItem('typebot_history_html');
+    sessionStorage.removeItem('typebot_answers');
+    sessionStorage.removeItem('typebot_current_step');
     this.sessionId = 'sess_' + Math.random().toString(36).substring(2, 9);
-    this.startConversation();
+    this.chatContainer.innerHTML = '';
+    this.answers = {};
+    const firstStep = this.flow && this.flow.steps && this.flow.steps[0];
+    if (firstStep) this.executeStep(firstStep.id);
   }
 
   getStepById(stepId) {
@@ -351,13 +377,16 @@ class TypebotChat {
     msgEl.className = 'flex items-end gap-2.5 animate-pop-in mb-3';
     msgEl.innerHTML = `
       <img src="${this.flow.settings.botAvatar}" class="w-8 h-8 rounded-full shadow-sm flex-shrink-0 bg-white p-0.5 border border-gray-200">
-      <div class="bg-white border border-gray-200/90 rounded-2xl rounded-bl-sm p-1.5 shadow-sm max-w-[85%]">
-        <img src="${imageUrl}" alt="Imagem do fluxo" class="rounded-xl max-h-72 w-auto object-cover cursor-pointer hover:opacity-95 transition-all shadow-xs" onclick="window.open(this.src, '_blank')">
-        <div class="text-[10px] text-gray-400 text-right px-1 pt-1">🔍 Clique para ampliar</div>
+      <div class="bg-white border border-gray-200/90 rounded-2xl rounded-bl-sm p-1.5 shadow-sm max-w-[85%] cursor-pointer group" onclick="openLightbox('${imageUrl}')">
+        <img src="${imageUrl}" alt="Imagem do fluxo" class="rounded-xl max-h-72 w-auto object-cover group-hover:opacity-90 transition-all shadow-xs">
+        <div class="text-[11px] text-emerald-700 font-semibold text-right px-1 pt-1 flex items-center justify-end gap-1">
+          <span>🔍 Toque para ampliar</span>
+        </div>
       </div>
     `;
     this.chatContainer.appendChild(msgEl);
     this.scrollToBottom();
+    this.saveStateToStorage();
   }
 
   renderButtons(step) {
@@ -595,6 +624,15 @@ class TypebotChat {
     }
   }
 
+  saveStateToStorage() {
+    try {
+      if (!this.chatContainer) return;
+      sessionStorage.setItem('typebot_history_html', this.chatContainer.innerHTML);
+      sessionStorage.setItem('typebot_answers', JSON.stringify(this.answers));
+      sessionStorage.setItem('typebot_current_step', this.currentStepId || '');
+    } catch (e) {}
+  }
+
   showSystemMessage(msg) {
     const el = document.createElement('div');
     el.className = 'text-center my-4 text-xs text-red-500 bg-red-50 p-2 rounded';
@@ -602,6 +640,25 @@ class TypebotChat {
     this.chatContainer.appendChild(el);
   }
 }
+
+// Funções globais de Lightbox (Zoom de imagem na mesma página sem reset)
+window.openLightbox = function(url) {
+  const lb = document.getElementById('image-lightbox');
+  const img = document.getElementById('lightbox-img');
+  if (lb && img) {
+    img.src = url;
+    lb.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+  }
+};
+
+window.closeLightbox = function() {
+  const lb = document.getElementById('image-lightbox');
+  if (lb) {
+    lb.classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+};
 
 // Inicia ao carregar a página
 document.addEventListener('DOMContentLoaded', () => {

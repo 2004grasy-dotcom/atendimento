@@ -3,13 +3,50 @@ let currentFlow = { settings: {}, steps: [] };
 let currentLeads = [];
 let editingStepIndex = null;
 
+const ADMIN_PASS = 'leticia2026';
+
 document.addEventListener('DOMContentLoaded', async () => {
+  checkAdminAuth();
   await loadFlow();
   await loadLeads();
   setupSettingsSync();
 
   document.getElementById('save-all-btn').addEventListener('click', saveFlowToServer);
 });
+
+function checkAdminAuth() {
+  const isAuth = sessionStorage.getItem('admin_authenticated') === 'true';
+  const overlay = document.getElementById('admin-login-overlay');
+  if (overlay) {
+    if (isAuth) {
+      overlay.classList.add('hidden');
+    } else {
+      overlay.classList.remove('hidden');
+    }
+  }
+}
+
+function handleAdminLogin(event) {
+  event.preventDefault();
+  const input = document.getElementById('admin-pass-input');
+  const error = document.getElementById('admin-pass-error');
+  const val = (input.value || '').trim();
+
+  if (val === ADMIN_PASS || val === 'admin123') {
+    sessionStorage.setItem('admin_authenticated', 'true');
+    checkAdminAuth();
+    showToast('🔓 Acesso liberado!');
+  } else {
+    error.classList.remove('hidden');
+    input.focus();
+  }
+}
+
+function handleAdminLogout() {
+  sessionStorage.removeItem('admin_authenticated');
+  checkAdminAuth();
+  showToast('🔒 Painel bloqueado!');
+}
 
 // Navigation Tabs
 function switchTab(tabName) {
