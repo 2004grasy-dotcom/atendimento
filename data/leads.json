@@ -1,0 +1,29 @@
+[
+  {
+    "id": "lead_1790874668899_gkkf9",
+    "sessionId": "sess_7o9rtfd",
+    "createdAt": "2026-10-01T17:11:08.899Z",
+    "name": "RAFAEL",
+    "whatsapp": "",
+    "email": "",
+    "answers": {
+      "nome": "RAFAEL"
+    }
+  },
+  {
+    "id": "lead_1790874333216_c4823",
+    "sessionId": "sess_1790874333216",
+    "createdAt": "2026-10-01T17:05:33.216Z",
+    "name": "Carlos Silva",
+    "whatsapp": "(11) 98765-4321",
+    "email": "carlos@teste.com",
+    "answers": {
+      "nome": "Carlos Silva",
+      "whatsapp": "(11) 98765-4321",
+      "email": "carlos@teste.com",
+      "interesse": "💼 Quero um Orçamento",
+      "tipo_servico": "🤖 Automação / Chatbot WhatsApp",
+      "nota_atendimento": "5 estrelas"
+    }
+  }
+]
