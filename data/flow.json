@@ -6,7 +6,7 @@
     "primaryColor": "#598E71",
     "bubbleColor": "#F3F4F6",
     "bubbleTextColor": "#1F2937",
-    "companyWhatsapp": "5511999999999",
+    "companyWhatsapp": "5567996146854",
     "webhookUrl": ""
   },
   "steps": [
@@ -165,7 +165,7 @@
         {
           "id": "opt_link_oficial",
           "label": "💳 Acessar Planos e Fazer Cadastro",
-          "url": "https://plataforma-oficial.lovable.app/planos",
+          "url": "https://plataforma-oficial.lovable.app/",
           "nextStepId": "step_final_instrucoes"
         }
       ]
