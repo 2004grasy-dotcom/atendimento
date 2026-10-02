@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Suporte e Entrega VIP - Letícia</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="bg-[#f0f2f5] text-gray-800 h-[100dvh] w-full overflow-hidden flex flex-col m-0 p-0">
+
+  <!-- Fullscreen Chat Container -->
+  <div class="w-full h-full flex flex-col bg-[#f0f2f5] overflow-hidden relative">
+    
+    <!-- Top Header (Full Width) -->
+    <header class="bg-white/95 backdrop-blur-md px-4 sm:px-6 py-3.5 border-b border-gray-200/80 flex items-center justify-between z-20 shadow-xs flex-shrink-0">
+      <div class="max-w-4xl w-full mx-auto flex items-center justify-between">
+        <div class="flex items-center gap-3.5">
+          <div class="relative">
+            <img src="/images/leticia.jpg" alt="Letícia" class="bot-avatar-img w-11 h-11 rounded-full p-0.5 bg-emerald-50 border border-emerald-300 shadow-sm object-cover">
+            <span class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-white pulse-dot"></span>
+          </div>
+          <div>
+            <h1 class="font-bold text-gray-900 text-base sm:text-lg leading-tight flex items-center gap-1.5">
+              <span>Letícia</span>
+              <span class="text-[11px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider">Suporte VIP</span>
+            </h1>
+            <p class="text-xs text-emerald-600 flex items-center gap-1.5 font-medium">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse"></span> Online agora
+            </p>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Messages Container -->
+    <main id="chat-messages" class="flex-1 overflow-y-auto px-3 sm:px-6 py-4 space-y-3 bg-[#efeae2]/30 relative">
+      <!-- Mensagens dinâmicas injetadas pelo suporte-engine.js -->
+    </main>
+
+    <!-- Floating "Novas Mensagens" Pill -->
+    <button id="new-messages-pill" onclick="window.suporteInstance && window.suporteInstance.scrollToBottom(true)" class="hidden fixed bottom-6 left-1/2 transform -translate-x-1/2 z-30 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-xl transition-all cursor-pointer flex items-center gap-2 border border-white/20">
+      <span>👇 Novas mensagens abaixo</span>
+    </button>
+
+    <!-- Bottom Input Bar -->
+    <footer id="input-area" class="p-3 sm:p-4 bg-white border-t border-gray-200 hidden flex-shrink-0 z-20">
+      <form id="input-form" class="max-w-2xl w-full mx-auto flex items-center gap-2">
+        <input 
+          type="text" 
+          id="chat-input" 
+          autocomplete="off"
+          class="flex-1 bg-gray-50 border border-gray-200 focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100 rounded-full px-5 py-3 text-sm md:text-base outline-none transition-all placeholder-gray-400"
+          placeholder="Digite seu e-mail da compra..."
+        >
+        <button 
+          type="submit" 
+          id="send-btn" 
+          class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-full p-3 shadow-md hover:shadow-emerald-600/25 transition-all duration-200 focus:outline-none transform active:scale-95 flex items-center justify-center flex-shrink-0 cursor-pointer"
+        >
+          <svg class="w-5 h-5 translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+        </button>
+      </form>
+    </footer>
+
+  </div>
+
+  <script src="/js/suporte-engine.js"></script>
+</body>
+</html>

@@ -66,6 +66,10 @@
           <span>📊 Leads & Respostas</span>
           <span id="leads-badge" class="ml-1 px-1.5 py-0.2 bg-gray-200 text-gray-700 text-xs rounded-full">0</span>
         </button>
+        <button onclick="switchTab('compradores')" id="tab-btn-compradores" class="tab-btn px-4 py-2 text-sm font-semibold rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors flex items-center gap-2">
+          <span>📦 Compradores Cactus</span>
+          <span id="compradores-badge" class="ml-1 px-1.5 py-0.2 bg-emerald-100 text-emerald-800 text-xs rounded-full">0</span>
+        </button>
         <button onclick="switchTab('settings')" id="tab-btn-settings" class="tab-btn px-4 py-2 text-sm font-semibold rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors flex items-center gap-2">
           <span>🎨 Aparência & Configurações</span>
         </button>
@@ -76,8 +80,12 @@
 
       <!-- Quick Actions -->
       <div class="flex items-center gap-3">
+        <a href="/suporte" target="_blank" class="text-xs sm:text-sm font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 flex items-center gap-1.5 px-3 py-1.5 border border-emerald-300 rounded-lg transition-all shadow-xs">
+          <span>💬 Abrir Suporte</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+        </a>
         <a href="/" target="_blank" class="text-xs sm:text-sm font-medium text-gray-600 hover:text-indigo-600 flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg hover:border-indigo-300 transition-all bg-white shadow-xs">
-          <span>Abrir Bot</span>
+          <span>Abrir Bot Vendas</span>
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
         </a>
         <button id="save-all-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs sm:text-sm px-4 py-2 rounded-lg shadow-md shadow-indigo-600/20 hover:shadow-indigo-600/30 transition-all flex items-center gap-2">
@@ -95,6 +103,7 @@
     <div class="flex md:hidden border-t border-gray-100 overflow-x-auto px-2 py-1.5 gap-1 bg-gray-50">
       <button onclick="switchTab('builder')" class="tab-btn-mobile px-3 py-1 text-xs font-semibold rounded-md text-indigo-700 bg-white shadow-xs whitespace-nowrap">Fluxo</button>
       <button onclick="switchTab('leads')" class="tab-btn-mobile px-3 py-1 text-xs font-semibold rounded-md text-gray-600 whitespace-nowrap">Leads</button>
+      <button onclick="switchTab('compradores')" class="tab-btn-mobile px-3 py-1 text-xs font-semibold rounded-md text-gray-600 whitespace-nowrap">Compradores</button>
       <button onclick="switchTab('settings')" class="tab-btn-mobile px-3 py-1 text-xs font-semibold rounded-md text-gray-600 whitespace-nowrap">Configurações</button>
       <button onclick="switchTab('embed')" class="tab-btn-mobile px-3 py-1 text-xs font-semibold rounded-md text-gray-600 whitespace-nowrap">Incorporar</button>
     </div>
@@ -350,6 +359,71 @@
 
     </div>
 
+    <!-- TAB 5: COMPRADORES DA CACTUS & SUPORTE -->
+    <div id="section-compradores" class="tab-section hidden max-w-5xl space-y-6">
+      
+      <!-- Top Banner Cactus Status -->
+      <div class="bg-gradient-to-r from-emerald-600 to-teal-700 rounded-2xl p-6 text-white shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-2 mb-1">
+            <span class="bg-white/20 text-white text-xs px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider">Cactus / Cakto Webhook Ativo</span>
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-300 animate-pulse"></span>
+          </div>
+          <h2 class="text-xl font-bold">Gestão de Compradores & Acesso VIP</h2>
+          <p class="text-emerald-100 text-xs sm:text-sm mt-0.5">Toda venda aprovada na Cactus cai aqui e libera o acesso automático no chat de suporte.</p>
+        </div>
+        <div class="flex items-center gap-2.5 w-full sm:w-auto">
+          <button onclick="abrirModalComprador()" class="flex-1 sm:flex-none bg-white text-emerald-800 hover:bg-emerald-50 font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+            <span>+ Cadastrar Comprador</span>
+          </button>
+          <a href="/suporte" target="_blank" class="flex-1 sm:flex-none bg-emerald-800/80 hover:bg-emerald-800 text-white font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm transition-all border border-emerald-400/40 flex items-center justify-center gap-1.5">
+            <span>💬 Testar /suporte</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- URL do Webhook Cactus Info Card -->
+      <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div class="space-y-1">
+          <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">URL do Webhook cadastrada na Cactus:</span>
+          <div class="font-mono text-xs sm:text-sm text-emerald-800 font-bold bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200 select-all">
+            https://atendimento-leticia.up.railway.app/api/webhooks/cactus
+          </div>
+        </div>
+        <div class="text-xs text-gray-500 max-w-sm">
+          💡 Link oficial entregue ao comprador: <a href="https://plataforma-das-fabricas.lovable.app/" target="_blank" class="text-emerald-600 font-bold underline">plataforma-das-fabricas.lovable.app</a>
+        </div>
+      </div>
+
+      <!-- Tabela de Compradores -->
+      <div class="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <h3 class="font-bold text-gray-900 text-base">Compradores com Acesso Liberado</h3>
+          <span id="compradores-total-text" class="text-xs text-gray-500">0 comprador(es)</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr class="bg-gray-50/80 text-gray-500 text-xs uppercase font-semibold border-b border-gray-100">
+                <th class="px-6 py-3.5">Cliente</th>
+                <th class="px-6 py-3.5">E-mail</th>
+                <th class="px-6 py-3.5">Produto / Plano</th>
+                <th class="px-6 py-3.5">Data da Compra</th>
+                <th class="px-6 py-3.5 text-center">Status</th>
+                <th class="px-6 py-3.5 text-right">Ação</th>
+              </tr>
+            </thead>
+            <tbody id="compradores-table-body" class="divide-y divide-gray-100 text-gray-700">
+              <tr>
+                <td colspan="6" class="text-center py-8 text-gray-400 text-sm">Carregando compradores...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
   </main>
 
   <!-- MODAL: ADICIONAR / EDITAR PASSO -->
@@ -449,6 +523,41 @@
         <button onclick="saveModalStep()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm px-5 py-2 rounded-xl shadow-md">Salvar Bloco</button>
       </div>
 
+    </div>
+  </div>
+
+  <!-- MODAL: CADASTRAR COMPRADOR MANUAL -->
+  <div id="modal-add-comprador" class="fixed inset-0 bg-gray-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-4 animate-pop-in">
+      <div class="flex items-center justify-between border-b border-gray-100 pb-3">
+        <h3 class="font-bold text-gray-900 text-lg">Liberar Acesso / Cadastrar Comprador</h3>
+        <button onclick="fecharModalComprador()" class="text-gray-400 hover:text-gray-600 p-1 rounded-full">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <form onsubmit="handleSalvarCompradorManual(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Nome do Comprador</label>
+          <input type="text" id="manual-comp-name" required placeholder="Ex: Maria Santos" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-500">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">E-mail da Compra (Chave de verificação)</label>
+          <input type="email" id="manual-comp-email" required placeholder="maria@exemplo.com" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-500">
+          <span class="text-[11px] text-gray-400">É este e-mail que o cliente digitará no chat do /suporte para receber o acesso.</span>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Produto / Plano</label>
+          <select id="manual-comp-product" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-500">
+            <option value="Plataforma de fornecedores+Grupo vip - VITALÍCIO">Plataforma de fornecedores+Grupo vip - VITALÍCIO</option>
+            <option value="Plataforma+ grupo vip plano basic ✅">Plataforma+ grupo vip plano basic ✅</option>
+          </select>
+        </div>
+        <div class="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
+          <button type="button" onclick="fecharModalComprador()" class="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-xl">Cancelar</button>
+          <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm px-5 py-2 rounded-xl shadow-md cursor-pointer">Salvar e Liberar Acesso</button>
+        </div>
+      </form>
     </div>
   </div>
 

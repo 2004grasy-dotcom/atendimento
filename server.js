@@ -13,6 +13,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const DATA_DIR = path.join(__dirname, 'data');
 const FLOW_FILE = path.join(DATA_DIR, 'flow.json');
 const LEADS_FILE = path.join(DATA_DIR, 'leads.json');
+const COMPRADORES_FILE = path.join(DATA_DIR, 'compradores.json');
 
 // Helpers for reading/writing JSON files
 function readJSON(file, fallback = {}) {
@@ -373,6 +374,222 @@ app.get('/api/export/csv', (req, res) => {
   res.send(csvContent);
 });
 
+// ==========================================
+// INTEGRAÇÃO CACTUS / CAKTO WEBHOOKS
+// ==========================================
+app.post('/api/webhooks/cactus', (req, res) => {
+  try {
+    const payload = req.body || {};
+    console.log('📦 Webhook recebido da Cactus/Cakto: Evento =', payload.event);
+
+    const compradores = readJSON(COMPRADORES_FILE, []);
+    let novosCompradores = 0;
+
+    // A Cakto envia req.body.data como array de itens ou como objeto único
+    const items = Array.isArray(payload.data) ? payload.data : (payload.data ? [payload.data] : [payload]);
+
+    items.forEach(item => {
+      const customer = item.customer || {};
+      const product = item.product || {};
+      const email = (customer.email || item.email || '').trim().toLowerCase();
+      const name = (customer.name || item.name || 'Cliente').trim();
+      const phone = (customer.phone || item.phone || '').trim();
+      const productName = (product.name || item.product_name || 'Plataforma de Fornecedores').trim();
+      const status = (item.status || payload.event || 'paid').toLowerCase();
+
+      // Somente registra se for pago / aprovado
+      const isApproved = status.includes('paid') || status.includes('aprov') || payload.event === 'purchase_approved';
+
+      if (email && isApproved) {
+        const existingIdx = compradores.findIndex(c => c.email.toLowerCase() === email);
+        const buyerData = {
+          id: item.id || 'compra_' + Date.now().toString(36),
+          name: name,
+          email: email,
+          phone: phone,
+          product: productName,
+          status: 'paid',
+          amount: item.amount || 0,
+          paidAt: item.paidAt || new Date().toISOString(),
+          createdAt: existingIdx >= 0 ? compradores[existingIdx].createdAt : new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        if (existingIdx >= 0) {
+          compradores[existingIdx] = buyerData;
+        } else {
+          compradores.unshift(buyerData);
+        }
+        novosCompradores++;
+      }
+    });
+
+    writeJSON(COMPRADORES_FILE, compradores);
+    res.status(200).json({ success: true, message: `${novosCompradores} comprador(es) registrado(s) com sucesso.` });
+  } catch (err) {
+    console.error('Erro ao processar webhook Cactus:', err);
+    res.status(500).json({ error: 'Erro ao processar webhook: ' + err.message });
+  }
+});
+
+// ==========================================
+// CHAT DE SUPORTE E ENTREGA PÓS-COMPRA
+// ==========================================
+app.post('/api/suporte/verificar', (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email || !email.trim()) {
+      return res.status(400).json({ error: 'E-mail não informado' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const compradores = readJSON(COMPRADORES_FILE, []);
+    const comprador = compradores.find(c => c.email && c.email.toLowerCase() === cleanEmail);
+
+    if (comprador) {
+      return res.json({
+        success: true,
+        encontrado: true,
+        comprador: {
+          name: comprador.name,
+          email: comprador.email,
+          product: comprador.product,
+          paidAt: comprador.paidAt
+        },
+        linkEntrega: "https://plataforma-das-fabricas.lovable.app/"
+      });
+    } else {
+      return res.json({
+        success: true,
+        encontrado: false,
+        message: 'Nenhuma compra aprovada encontrada para este e-mail.'
+      });
+    }
+  } catch (err) {
+    console.error('Erro ao verificar suporte:', err);
+    res.status(500).json({ error: 'Erro interno ao verificar cadastro' });
+  }
+});
+
+// Endpoint de IA especializada em Suporte e Pós-Venda (Leticia Suporte)
+app.post('/api/suporte/ai/ask', async (req, res) => {
+  try {
+    const { question, email, name } = req.body;
+    if (!question || !question.trim()) {
+      return res.status(400).json({ error: 'Pergunta vazia' });
+    }
+
+    const flow = readJSON(FLOW_FILE, {});
+    const apiKey = process.env.GEMINI_API_KEY || (flow.settings && flow.settings.geminiApiKey) || '';
+
+    const systemInstruction = `Você é a Letícia, consultora e atendente de suporte oficial da Plataforma de Fabricantes e Fornecedores de Roupas a Preço de Custo.
+O cliente ${name ? `se chama ${name} e ` : ''}já é um comprador oficial com compra confirmada no sistema (Pós-Venda / Suporte).
+
+INFORMAÇÕES CRUCIAIS:
+- LINK DE ACESSO OFICIAL À PLATAFORMA E GRUPO VIP: https://plataforma-das-fabricas.lovable.app/
+(Nesse link ele já encontra o botão para entrar no Grupo VIP e a área de acesso à plataforma de fornecedores).
+- COMO ENCONTRAR OS FORNECEDORES DENTRO DA PLATAFORMA (SUPER IMPORTANTE EXPLICAR QUANDO ELE PERGUNTAR):
+  1️⃣ Opção de Busca: campo de pesquisa inteligente onde ele digita o tipo de roupa que procura (ex: vestidos, conjuntos, moda íntima, jeans, fitness, infantil, etc.).
+  2️⃣ Central de Fornecedores: área com todos os contatos diretos, WhatsApp dos fabricantes e catálogos organizados por polos industriais de confecção (Brás, Bom Retiro, Goiânia, Fortaleza, etc.).
+- FRETE: A grande maioria dos fornecedores tem frete facilitado com transportadoras parceiras e Correios super em conta para o Brasil inteiro, e muitos com frete grátis dependendo do valor do pedido.
+- PEDIDO MÍNIMO: Vários distribuidores vendem no atacado a partir de poucas peças (ex: 6 peças ou R$ 100) e muitos também atendem no varejo sem pedido mínimo a preço de fábrica.
+- DÚVIDAS DE LOGIN / SENHA: O link oficial direto de acesso é https://plataforma-das-fabricas.lovable.app/. Se precisar de suporte adicional, nossa equipe também dá total assistência.
+
+REGRAS:
+- Responda SEMPRE em formato JSON com o campo "messages":
+  { "messages": ["mensagem 1", "mensagem 2 (se necessário)"] }
+- Mensagens curtas, humanas, simpáticas e acolhedoras estilo WhatsApp (sem textões).
+- Chame a pessoa pelo nome ${name ? `(${name})` : ''} com carinho quando fizer sentido.`;
+
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=' + apiKey;
+    const aiRes = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: question.trim() }] }],
+        systemInstruction: { parts: [{ text: systemInstruction }] },
+        generationConfig: { responseMimeType: 'application/json' }
+      })
+    });
+
+    const aiData = await aiRes.json();
+    let messages = [];
+
+    if (aiData.candidates && aiData.candidates[0] && aiData.candidates[0].content && aiData.candidates[0].content.parts) {
+      try {
+        const rawJson = aiData.candidates[0].content.parts[0].text;
+        const parsed = JSON.parse(rawJson);
+        if (Array.isArray(parsed.messages)) {
+          messages = parsed.messages;
+        } else if (typeof parsed.messages === 'string') {
+          messages = [parsed.messages];
+        }
+      } catch (e) {
+        messages = [aiData.candidates[0].content.parts[0].text];
+      }
+    }
+
+    if (messages.length === 0) {
+      messages = ['Estou à disposição para te ajudar no que precisar! Caso queira acessar agora a plataforma e o Grupo VIP, basta clicar no link oficial: https://plataforma-das-fabricas.lovable.app/ ✨'];
+    }
+
+    res.json({ success: true, messages });
+  } catch (err) {
+    console.error('Erro na rota de IA de suporte:', err);
+    res.status(500).json({ error: 'Erro ao processar suporte: ' + err.message });
+  }
+});
+
+// Endpoints de Gestão de Compradores (Admin)
+app.get('/api/compradores', (req, res) => {
+  const compradores = readJSON(COMPRADORES_FILE, []);
+  res.json(compradores);
+});
+
+app.post('/api/compradores', (req, res) => {
+  try {
+    const { name, email, phone, product } = req.body;
+    if (!email || !email.trim()) {
+      return res.status(400).json({ error: 'E-mail é obrigatório' });
+    }
+    const cleanEmail = email.trim().toLowerCase();
+    const compradores = readJSON(COMPRADORES_FILE, []);
+    const existingIdx = compradores.findIndex(c => c.email.toLowerCase() === cleanEmail);
+
+    const buyerData = {
+      id: 'manual_' + Date.now().toString(36),
+      name: (name || 'Cliente').trim(),
+      email: cleanEmail,
+      phone: (phone || '').trim(),
+      product: (product || 'Plataforma + Grupo VIP').trim(),
+      status: 'paid',
+      amount: 0,
+      paidAt: new Date().toISOString(),
+      createdAt: existingIdx >= 0 ? compradores[existingIdx].createdAt : new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    if (existingIdx >= 0) {
+      compradores[existingIdx] = buyerData;
+    } else {
+      compradores.unshift(buyerData);
+    }
+
+    writeJSON(COMPRADORES_FILE, compradores);
+    res.json({ success: true, comprador: buyerData });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao cadastrar comprador: ' + err.message });
+  }
+});
+
+app.delete('/api/compradores/:email', (req, res) => {
+  const emailToDelete = decodeURIComponent(req.params.email).toLowerCase();
+  let compradores = readJSON(COMPRADORES_FILE, []);
+  compradores = compradores.filter(c => c.email.toLowerCase() !== emailToDelete);
+  writeJSON(COMPRADORES_FILE, compradores);
+  res.json({ success: true, message: 'Comprador removido' });
+});
+
 // Rota padrão do Viewer e Admin
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
@@ -380,7 +597,11 @@ app.get('/admin', (req, res) => {
   res.sendFile('admin.html', { root: PUBLIC_DIR });
 });
 
-// Middleware catch-all para servir a interface do bot (compatível com Express 4 e 5)
+app.get(['/suporte', '/acesso'], (req, res) => {
+  res.sendFile('suporte.html', { root: PUBLIC_DIR });
+});
+
+// Middleware catch-all para servir a interface do bot de vendas (compatível com Express 4 e 5)
 app.use((req, res) => {
   res.sendFile('index.html', { root: PUBLIC_DIR });
 });

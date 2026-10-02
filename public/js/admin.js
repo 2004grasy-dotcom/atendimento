@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   checkAdminAuth();
   await loadFlow();
   await loadLeads();
+  await loadCompradores();
   setupSettingsSync();
 
   document.getElementById('save-all-btn').addEventListener('click', saveFlowToServer);
@@ -67,6 +68,9 @@ function switchTab(tabName) {
 
   if (tabName === 'leads') {
     loadLeads();
+  }
+  if (tabName === 'compradores') {
+    loadCompradores();
   }
 }
 
@@ -667,4 +671,137 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+// ==========================================
+// GESTÃO DE COMPRADORES DA CACTUS (PÓS-VENDA)
+// ==========================================
+let currentCompradores = [];
+
+async function loadCompradores() {
+  try {
+    const res = await fetch('/api/compradores');
+    if (!res.ok) return;
+    currentCompradores = await res.json();
+
+    const badge = document.getElementById('compradores-badge');
+    const totalText = document.getElementById('compradores-total-text');
+    if (badge) badge.textContent = currentCompradores.length;
+    if (totalText) totalText.textContent = `${currentCompradores.length} comprador(es)`;
+
+    renderCompradoresTable();
+  } catch (err) {
+    console.error('Erro ao carregar compradores:', err);
+  }
+}
+
+function renderCompradoresTable() {
+  const tbody = document.getElementById('compradores-table-body');
+  if (!tbody) return;
+
+  if (currentCompradores.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" class="text-center py-10 text-gray-400">
+          <div class="text-2xl mb-1">📦</div>
+          Nenhum comprador registrado ainda.<br>
+          <span class="text-xs text-gray-400">As compras aprovadas da Cactus aparecerão aqui automaticamente, ou você pode cadastrar manualmente.</span>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = currentCompradores.map(c => {
+    const dataCompra = c.paidAt ? new Date(c.paidAt).toLocaleString('pt-BR') : '-';
+    const safeName = escapeHtml(c.name || 'Cliente');
+    const safeEmail = escapeHtml(c.email || '-');
+    const safePhone = escapeHtml(c.phone || '-');
+    const safeProduct = escapeHtml(c.product || 'Plataforma');
+
+    return `
+      <tr class="hover:bg-slate-50 transition-colors">
+        <td class="px-6 py-4">
+          <div class="font-bold text-gray-900">${safeName}</div>
+          <div class="text-xs text-gray-400">${safePhone}</div>
+        </td>
+        <td class="px-6 py-4 font-mono text-xs text-indigo-700 font-semibold select-all">
+          ${safeEmail}
+        </td>
+        <td class="px-6 py-4">
+          <span class="inline-block bg-emerald-50 text-emerald-800 text-xs px-2.5 py-1 rounded-lg border border-emerald-200 font-medium">
+            ${safeProduct}
+          </span>
+        </td>
+        <td class="px-6 py-4 text-xs text-gray-500">
+          ${dataCompra}
+        </td>
+        <td class="px-6 py-4 text-center">
+          <span class="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2 py-0.5 rounded-full">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Pago / VIP
+          </span>
+        </td>
+        <td class="px-6 py-4 text-right">
+          <button onclick="excluirComprador('${encodeURIComponent(c.email)}')" title="Remover comprador" class="text-gray-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors cursor-pointer">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function abrirModalComprador() {
+  const modal = document.getElementById('modal-add-comprador');
+  if (modal) {
+    document.getElementById('manual-comp-name').value = '';
+    document.getElementById('manual-comp-email').value = '';
+    modal.classList.remove('hidden');
+    document.getElementById('manual-comp-name').focus();
+  }
+}
+
+function fecharModalComprador() {
+  const modal = document.getElementById('modal-add-comprador');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function handleSalvarCompradorManual(event) {
+  event.preventDefault();
+  const name = document.getElementById('manual-comp-name').value.trim();
+  const email = document.getElementById('manual-comp-email').value.trim();
+  const product = document.getElementById('manual-comp-product').value;
+
+  try {
+    const res = await fetch('/api/compradores', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, product })
+    });
+    const data = await res.json();
+    if (data.success) {
+      fecharModalComprador();
+      showToast('🎉 Comprador liberado com sucesso!');
+      await loadCompradores();
+    } else {
+      alert('Erro: ' + (data.error || 'Não foi possível salvar.'));
+    }
+  } catch (err) {
+    alert('Erro de conexão ao salvar comprador.');
+  }
+}
+
+async function excluirComprador(encodedEmail) {
+  const email = decodeURIComponent(encodedEmail);
+  if (confirm(`Deseja remover o acesso do comprador ${email}?`)) {
+    try {
+      const res = await fetch(`/api/compradores/${encodedEmail}`, { method: 'DELETE' });
+      if (res.ok) {
+        showToast('Comprador removido');
+        await loadCompradores();
+      }
+    } catch (e) {
+      showToast('❌ Erro ao remover');
+    }
+  }
 }
