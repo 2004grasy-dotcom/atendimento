@@ -18,6 +18,7 @@ class TypebotChat {
     this.textInput = document.getElementById('chat-input');
     this.sendBtn = document.getElementById('send-btn');
     this.audioEnabled = true;
+    this.isAIMode = false;
 
     window.chatInstance = this;
     this.init();
@@ -525,6 +526,16 @@ class TypebotChat {
 
     this.chatContainer.appendChild(ctaContainer);
     this.scrollToBottom(false);
+
+    // Ativa campo de tirar dúvidas com Inteligência Artificial
+    this.isAIMode = true;
+    this.inputArea.classList.remove('hidden');
+    this.textInput.placeholder = 'Ficou com alguma dúvida? Pergunte aqui...';
+    this.textInput.value = '';
+
+    setTimeout(() => {
+      this.renderBotMessage("💬 **Ficou com alguma dúvida sobre fornecedores, frete ou acesso?**\n\nPode digitar sua pergunta aqui embaixo que eu te respondo agora mesmo! 👇");
+    }, 1200);
   }
 
   showTextInput(step) {
@@ -547,9 +558,43 @@ class TypebotChat {
     this.inputArea.classList.add('hidden');
   }
 
+  async handleAIQuestion(question) {
+    this.textInput.value = '';
+    this.renderUserMessage(question);
+    this.playBeepSound();
+
+    await this.showTypingIndicator();
+
+    try {
+      const res = await fetch('/api/ai/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: question,
+          sessionId: this.sessionId,
+          answers: this.answers
+        })
+      });
+      const data = await res.json();
+      const reply = data.answer || "Estou à disposição para te ajudar! Caso queira tirar mais dúvidas ou confirmar seu acesso, você pode clicar no botão acima para escolher seu plano ou me chamar no WhatsApp!";
+      this.renderBotMessage(reply);
+      this.playBeepSound();
+    } catch (err) {
+      console.error('Erro na IA:', err);
+      this.renderBotMessage("Tive uma pequena oscilação aqui, mas você pode tirar qualquer dúvida diretamente no nosso WhatsApp pelo botão acima! ✨");
+    }
+
+    this.textInput.focus();
+  }
+
   handleUserTextSubmit() {
     const rawVal = this.textInput.value.trim();
     if (!rawVal) return;
+
+    if (this.isAIMode) {
+      this.handleAIQuestion(rawVal);
+      return;
+    }
 
     const step = this.getStepById(this.currentStepId);
     if (!step) return;

@@ -7,6 +7,7 @@
     "bubbleColor": "#F3F4F6",
     "bubbleTextColor": "#1F2937",
     "companyWhatsapp": "5567996146854",
+    "geminiApiKey": "",
     "webhookUrl": ""
   },
   "steps": [

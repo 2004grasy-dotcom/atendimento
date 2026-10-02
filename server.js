@@ -225,6 +225,85 @@ app.post('/api/leads', async (req, res) => {
   }
 });
 
+// Endpoint de IA para Dúvidas e Quebra de Objeções (Leticia AI)
+app.post('/api/ai/ask', async (req, res) => {
+  try {
+    const { question, sessionId, answers } = req.body;
+    if (!question || !question.trim()) {
+      return res.status(400).json({ error: 'Pergunta vazia' });
+    }
+
+    const flow = readJSON(FLOW_FILE, {});
+    const apiKey = process.env.GEMINI_API_KEY || (flow.settings && flow.settings.geminiApiKey) || '';
+
+    const userName = (answers && (answers.nome || answers.name)) || '';
+    const userGoal = (answers && answers.objetivo) || '';
+
+    const systemInstruction = `Você é a Letícia, consultora e atendente virtual oficial da Plataforma de Fabricantes e Fornecedores de Roupas a Preço de Custo.
+Seu objetivo é tirar qualquer dúvida do cliente com simpatia, naturalidade de WhatsApp e quebrar qualquer objeção para que ele faça o cadastro na plataforma com segurança e confiança.
+
+CONHECIMENTO COMPLETO DA PLATAFORMA E DO FUNIL:
+- O QUE É A PLATAFORMA: Um sistema exclusivo com contatos, catálogos e acesso direto a distribuidores e fabricantes de confecção própria (Brás, Bom Retiro, Goiânia, Fortaleza, etc.) vendendo roupas femininas, vestidos, conjuntos, etc., a preço de custo real de fábrica.
+- FRETE: A grande maioria dos fabricantes tem frete grátis ou frete facilitado com transportadoras parceiras e Correios, entregando com segurança e preço muito baixo para todas as cidades do Brasil.
+- PEDIDO MÍNIMO:
+  * Para revendedores: A partir de apenas R$ 100,00 ou 6 peças. Muitos fornecedores NEM têm pedido mínimo!
+  * Para consumo próprio: Vários distribuidores vendem no varejo a preço de atacado sem exigência de quantidade mínima.
+- PLANOS DE ACESSO: Plano Essencial e Plano Pro.
+- FORMAS DE PAGAMENTO: Cartão de crédito ou Pix com liberação imediata.
+- COMO O CLIENTE RECEBE O ACESSO: Assim que preencher o cadastro e efetuar o pagamento, o acesso (login e senha da plataforma) chega IMEDIATAMENTE por e-mail no ato da compra e nossa equipe de suporte também chama no WhatsApp!
+- LINK OFICIAL PARA CADASTRO: https://plataforma-oficial.lovable.app/
+- WHATSAPP DE SUPORTE: (67) 99614-6854
+
+REGRAS DE COMUNICAÇÃO:
+1. Tom de voz: Simpática, acolhedora, humana, brasileira, com linguagem de WhatsApp. Use emojis com moderação (✨, 🛍️, 🥰, 🚀, 💬).
+2. Tamanho da resposta: Direta e objetiva (1 a 2 parágrafos curtos). Nada de textos gigantescos ou robóticos.
+3. Se souber o nome (${userName ? userName : 'se o cliente tiver informado'}), use o nome dele para criar conexão.
+4. Finalização: Sempre termine quebrando a objeção e convidando a pessoa com entusiasmo a clicar no botão de cadastro para escolher o plano ou a chamar no WhatsApp se preferir.`;
+
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=' + apiKey;
+    const aiRes = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: question.trim() }]
+          }
+        ],
+        systemInstruction: {
+          parts: [{ text: systemInstruction }]
+        }
+      })
+    });
+
+    const aiData = await aiRes.json();
+    let reply = 'Estou à disposição para te ajudar! Caso queira tirar mais dúvidas ou confirmar seu acesso, você pode acessar os planos no botão de cadastro acima ou me chamar no WhatsApp!';
+    if (aiData.candidates && aiData.candidates[0] && aiData.candidates[0].content && aiData.candidates[0].content.parts) {
+      reply = aiData.candidates[0].content.parts.map(p => p.text).join('\n').trim();
+    }
+
+    // Salva a dúvida no histórico do lead
+    if (sessionId) {
+      const leads = readJSON(LEADS_FILE, []);
+      const lead = leads.find(l => l.sessionId === sessionId);
+      if (lead) {
+        if (!lead.answers) lead.answers = {};
+        const qCount = Object.keys(lead.answers).filter(k => k.startsWith('duvida_ia_')).length + 1;
+        lead.answers[`duvida_ia_${qCount}`] = question.trim();
+        lead.etapaAtual = `Tirou dúvida com IA: "${question.trim().substring(0, 35)}..."`;
+        lead.updatedAt = new Date().toISOString();
+        writeJSON(LEADS_FILE, leads);
+      }
+    }
+
+    res.json({ success: true, answer: reply });
+  } catch (err) {
+    console.error('Erro na rota /api/ai/ask:', err);
+    res.status(500).json({ error: 'Erro ao processar resposta da IA: ' + err.message });
+  }
+});
+
 app.delete('/api/leads/:id', (req, res) => {
   const { id } = req.params;
   let leads = readJSON(LEADS_FILE, []);

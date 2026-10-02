@@ -440,6 +440,7 @@ function populateSettingsInputs() {
   document.getElementById('setting-primary-color').value = s.primaryColor || '#4F46E5';
   document.getElementById('setting-primary-color-text').value = s.primaryColor || '#4F46E5';
   document.getElementById('setting-company-whatsapp').value = s.companyWhatsapp || '';
+  document.getElementById('setting-gemini-key').value = s.geminiApiKey || '';
   document.getElementById('setting-webhook-url').value = s.webhookUrl || '';
 }
 
@@ -469,6 +470,7 @@ function saveSettings() {
   currentFlow.settings.botAvatar = document.getElementById('setting-bot-avatar').value;
   currentFlow.settings.primaryColor = document.getElementById('setting-primary-color-text').value;
   currentFlow.settings.companyWhatsapp = document.getElementById('setting-company-whatsapp').value;
+  currentFlow.settings.geminiApiKey = document.getElementById('setting-gemini-key').value.trim();
   currentFlow.settings.webhookUrl = document.getElementById('setting-webhook-url').value;
 
   saveFlowToServer();
