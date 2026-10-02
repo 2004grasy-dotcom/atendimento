@@ -582,6 +582,95 @@ app.post('/api/compradores', (req, res) => {
   }
 });
 
+// Importação em Massa de Compradores via CSV
+app.post('/api/compradores/import-csv', (req, res) => {
+  try {
+    const { csvText } = req.body;
+    if (!csvText || typeof csvText !== 'string') {
+      return res.status(400).json({ error: 'Conteúdo CSV não enviado.' });
+    }
+
+    const lines = csvText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (lines.length < 2) {
+      return res.status(400).json({ error: 'O CSV precisa ter pelo menos o cabeçalho e uma linha.' });
+    }
+
+    const headerLine = lines[0];
+    const delimiter = headerLine.includes(';') ? ';' : ',';
+
+    const parseRow = (line) => {
+      const regex = new RegExp(`(?:^|${delimiter})(?:"([^"]*(?:""[^"]*)*)"|([^"${delimiter}]*))`, 'g');
+      const cells = [];
+      let match;
+      while ((match = regex.exec(line)) !== null) {
+        let val = match[1] !== undefined ? match[1].replace(/""/g, '"') : match[2];
+        cells.push((val || '').trim());
+      }
+      return cells;
+    };
+
+    const headers = parseRow(headerLine).map(h => h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, ''));
+
+    const emailIdx = headers.findIndex(h => h.includes('email') || h.includes('mail'));
+    const nameIdx = headers.findIndex(h => h.includes('nome') || h.includes('name') || h.includes('cliente'));
+    const phoneIdx = headers.findIndex(h => h.includes('tel') || h.includes('cel') || h.includes('phone') || h.includes('fone'));
+    const productIdx = headers.findIndex(h => h.includes('prod') || h.includes('plano') || h.includes('item') || h.includes('oferta'));
+    const statusIdx = headers.findIndex(h => h.includes('status') || h.includes('situacao') || h.includes('estado'));
+
+    if (emailIdx === -1) {
+      return res.status(400).json({ error: 'Não foi possível encontrar a coluna de E-mail no cabeçalho do CSV.' });
+    }
+
+    const compradores = readJSON(COMPRADORES_FILE, []);
+    let count = 0;
+
+    for (let i = 1; i < lines.length; i++) {
+      const cells = parseRow(lines[i]);
+      const email = (cells[emailIdx] || '').trim().toLowerCase();
+
+      if (!email || !email.includes('@')) continue;
+
+      if (statusIdx !== -1) {
+        const st = (cells[statusIdx] || '').toLowerCase();
+        if (st.includes('cancel') || st.includes('recus') || st.includes('estorn') || st.includes('refund')) {
+          continue;
+        }
+      }
+
+      const name = nameIdx !== -1 && cells[nameIdx] ? cells[nameIdx] : 'Cliente';
+      const phone = phoneIdx !== -1 && cells[phoneIdx] ? cells[phoneIdx] : '';
+      const product = productIdx !== -1 && cells[productIdx] ? cells[productIdx] : 'Plataforma + Grupo VIP';
+
+      const existingIdx = compradores.findIndex(c => c.email.toLowerCase() === email);
+      const buyerData = {
+        id: 'csv_' + Date.now().toString(36) + '_' + i,
+        name: name,
+        email: email,
+        phone: phone,
+        product: product,
+        status: 'paid',
+        amount: 0,
+        paidAt: new Date().toISOString(),
+        createdAt: existingIdx >= 0 ? compradores[existingIdx].createdAt : new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      if (existingIdx >= 0) {
+        compradores[existingIdx] = buyerData;
+      } else {
+        compradores.unshift(buyerData);
+      }
+      count++;
+    }
+
+    writeJSON(COMPRADORES_FILE, compradores);
+    res.json({ success: true, count, total: compradores.length });
+  } catch (err) {
+    console.error('Erro ao importar CSV:', err);
+    res.status(500).json({ error: 'Erro ao processar CSV: ' + err.message });
+  }
+});
+
 app.delete('/api/compradores/:email', (req, res) => {
   const emailToDelete = decodeURIComponent(req.params.email).toLowerCase();
   let compradores = readJSON(COMPRADORES_FILE, []);

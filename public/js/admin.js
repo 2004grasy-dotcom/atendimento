@@ -805,3 +805,32 @@ async function excluirComprador(encodedEmail) {
     }
   }
 }
+
+async function handleUploadCSV(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const csvText = e.target.result;
+    showToast('⏳ Processando arquivo CSV...');
+    try {
+      const res = await fetch('/api/compradores/import-csv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csvText })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`🎉 ${data.count} comprador(es) importado(s) com sucesso!`);
+        await loadCompradores();
+      } else {
+        alert('Erro ao importar CSV: ' + (data.error || 'Verifique o formato do arquivo.'));
+      }
+    } catch (err) {
+      alert('Erro de conexão ao enviar CSV.');
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
