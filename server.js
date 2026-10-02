@@ -710,8 +710,13 @@ app.get(['/suporte', '/acesso'], (req, res) => {
   res.sendFile('suporte.html', { root: PUBLIC_DIR });
 });
 
-// Middleware catch-all para servir a interface do bot de vendas (compatível com Express 4 e 5)
+// Middleware catch-all inteligente:
+// Se o domínio for suporte-leticia (ou DEFAULT_PAGE=suporte), a página inicial é o suporte
+// Se o domínio for atendimento-leticia, a página inicial é o bot de vendas
 app.use((req, res) => {
+  if (process.env.DEFAULT_PAGE === 'suporte' || (req.hostname && req.hostname.toLowerCase().includes('suporte'))) {
+    return res.sendFile('suporte.html', { root: PUBLIC_DIR });
+  }
   res.sendFile('index.html', { root: PUBLIC_DIR });
 });
 
