@@ -306,7 +306,7 @@ REGRAS OBRIGATÓRIAS DE COMUNICAÇÃO:
     }
 
     if (messages.length === 0) {
-      messages = ['Estou à disposição para te ajudar! Caso queira mais detalhes ou queira escolher o seu plano, pode clicar nos botões acima ou me chamar no WhatsApp! ✨'];
+      messages = ['Estou à disposição para te ajudar! Caso queira escolher o seu plano, você pode clicar no botão de cadastro na tela ou me mandar mais dúvidas aqui no chat! ✨'];
     }
 
     // Salva a dúvida no histórico do lead

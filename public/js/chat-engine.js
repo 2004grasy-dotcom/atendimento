@@ -408,6 +408,8 @@ class TypebotChat {
     const optionsContainer = document.createElement('div');
     optionsContainer.className = 'flex flex-col gap-2 pl-10 pr-2 my-2 animate-pop-in max-w-2xl w-full mx-auto';
 
+    const hasUrlBtn = step.options.some(o => o.url);
+
     step.options.forEach(opt => {
       const btn = document.createElement('button');
       btn.className = 'w-full text-left bg-white hover:bg-emerald-50 border-2 border-emerald-200 hover:border-emerald-600 text-gray-800 font-medium py-3 px-4 rounded-xl shadow-sm transition-all duration-200 flex items-center justify-between group cursor-pointer';
@@ -427,10 +429,10 @@ class TypebotChat {
           this.saveLead();
 
           window.open(opt.url, '_blank');
-          optionsContainer.remove();
-          this.renderUserMessage(opt.label);
           const nextId = opt.nextStepId || step.nextStepId;
           if (nextId) {
+            optionsContainer.remove();
+            this.renderUserMessage(opt.label);
             setTimeout(() => this.executeStep(nextId), 600);
           }
         });
@@ -460,6 +462,22 @@ class TypebotChat {
 
     this.chatContainer.appendChild(optionsContainer);
     this.scrollToBottom(false);
+
+    // Se for o botão de planos/cadastro, libera imediatamente o chat e o campo de dúvidas com IA
+    if (hasUrlBtn) {
+      this.answers['chegou_ao_fim'] = true;
+      this.answers['etapa_atual'] = 'Visualizou Botão de Planos';
+      this.saveLead();
+
+      this.isAIMode = true;
+      this.inputArea.classList.remove('hidden');
+      this.textInput.placeholder = 'Ficou com alguma dúvida? Pergunte aqui...';
+      this.textInput.value = '';
+
+      setTimeout(() => {
+        this.renderBotMessage("💬 **Ficou com alguma dúvida?** Pode digitar sua pergunta aqui embaixo que eu te respondo agora mesmo! 👇");
+      }, 1000);
+    }
   }
 
   renderRatingStars(step) {
@@ -578,7 +596,7 @@ class TypebotChat {
       const data = await res.json();
       const msgs = (data.messages && data.messages.length > 0) 
         ? data.messages 
-        : ["Estou à disposição para te ajudar! Caso queira tirar mais dúvidas ou confirmar seu acesso, você pode clicar no botão acima para escolher seu plano ou me chamar no WhatsApp!"];
+        : ["Estou à disposição para te ajudar! Caso queira escolher seu plano e fazer seu cadastro, basta clicar no botão acima ou me mandar sua dúvida por aqui!"];
 
       // Renderiza as mensagens consecutivas separadas, estilo WhatsApp real
       for (let i = 0; i < msgs.length; i++) {
@@ -595,7 +613,7 @@ class TypebotChat {
       }
     } catch (err) {
       console.error('Erro na IA:', err);
-      this.renderBotMessage("Tive uma pequena oscilação aqui, mas você pode tirar qualquer dúvida diretamente no nosso WhatsApp pelo botão acima! ✨");
+      this.renderBotMessage("Tive uma pequena oscilação aqui, mas você pode clicar no botão acima para acessar os planos ou digitar sua dúvida novamente! ✨");
     }
 
     this.textInput.focus();

@@ -165,6 +165,13 @@
       "type": "message",
       "content": "**Certo {{nome}}, vou te enviar o link de pagamento, ok?**\n\nLembrando que o link é para você acessar e preencher seu cadastro!",
       "delay": 1500,
+      "nextStepId": "step_final_instrucoes"
+    },
+    {
+      "id": "step_final_instrucoes",
+      "type": "message",
+      "content": "Assim que preencher seu cadastro e efetuar seu pagamento, o acesso vai chegar automaticamente no seu e-mail, mas também é enviado pelo WhatsApp!",
+      "delay": 1500,
       "nextStepId": "step_link_planos"
     },
     {
@@ -175,24 +182,9 @@
         {
           "id": "opt_link_oficial",
           "label": "💳 Acessar Planos e Fazer Cadastro",
-          "url": "https://plataforma-oficial.lovable.app/",
-          "nextStepId": "step_final_instrucoes"
+          "url": "https://plataforma-oficial.lovable.app/"
         }
       ]
-    },
-    {
-      "id": "step_final_instrucoes",
-      "type": "message",
-      "content": "Assim que preencher seu cadastro e efetuar o pagamento, me avise no WhatsApp, {{nome}}! Que vou te passar o acesso, combinado?\n\nO acesso também é enviado por e-mail no ato da compra e o suporte vai te chamar no WhatsApp!",
-      "delay": 1500,
-      "nextStepId": "step_cta_whatsapp"
-    },
-    {
-      "id": "step_cta_whatsapp",
-      "type": "redirect_whatsapp",
-      "content": "Se tiver qualquer dúvida ou assim que finalizar seu pagamento, clique abaixo:",
-      "buttonText": "Falar com Suporte no WhatsApp 💬",
-      "customMessage": "Olá! Sou {{nome}}, fiz meu cadastro na plataforma e gostaria de confirmar meu acesso."
     }
   ]
 }
