@@ -820,15 +820,22 @@ async function handleUploadCSV(event) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ csvText })
       });
-      const data = await res.json();
-      if (data.success) {
+      
+      const rawText = await res.text();
+      let data = null;
+      try {
+        data = JSON.parse(rawText);
+      } catch (parseErr) {}
+
+      if (res.ok && data && data.success) {
         showToast(`🎉 ${data.count} comprador(es) importado(s) com sucesso!`);
         await loadCompradores();
       } else {
-        alert('Erro ao importar CSV: ' + (data.error || 'Verifique o formato do arquivo.'));
+        const msg = (data && data.error) ? data.error : (rawText || `Status HTTP ${res.status}`);
+        alert('Erro ao importar CSV: ' + msg);
       }
     } catch (err) {
-      alert('Erro de conexão ao enviar CSV.');
+      alert('Erro de conexão: ' + err.message);
     }
     event.target.value = '';
   };

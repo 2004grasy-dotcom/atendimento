@@ -7,7 +7,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const DATA_DIR = path.join(__dirname, 'data');
@@ -585,10 +586,13 @@ app.post('/api/compradores', (req, res) => {
 // Importação em Massa de Compradores via CSV
 app.post('/api/compradores/import-csv', (req, res) => {
   try {
-    const { csvText } = req.body;
+    let { csvText } = req.body;
     if (!csvText || typeof csvText !== 'string') {
       return res.status(400).json({ error: 'Conteúdo CSV não enviado.' });
     }
+
+    // Remove BOM se presente
+    csvText = csvText.replace(/^\uFEFF/, '').trim();
 
     const lines = csvText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     if (lines.length < 2) {
@@ -596,7 +600,17 @@ app.post('/api/compradores/import-csv', (req, res) => {
     }
 
     const headerLine = lines[0];
-    const delimiter = headerLine.includes(';') ? ';' : ',';
+    
+    // Auto-detectar delimitador
+    const countSemicolons = (headerLine.match(/;/g) || []).length;
+    const countCommas = (headerLine.match(/,/g) || []).length;
+    const countTabs = (headerLine.match(/\t/g) || []).length;
+    let delimiter = ',';
+    if (countSemicolons > countCommas && countSemicolons > countTabs) {
+      delimiter = ';';
+    } else if (countTabs > countCommas && countTabs > countSemicolons) {
+      delimiter = '\t';
+    }
 
     const parseRow = (line) => {
       const regex = new RegExp(`(?:^|${delimiter})(?:"([^"]*(?:""[^"]*)*)"|([^"${delimiter}]*))`, 'g');
@@ -611,14 +625,20 @@ app.post('/api/compradores/import-csv', (req, res) => {
 
     const headers = parseRow(headerLine).map(h => h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, ''));
 
-    const emailIdx = headers.findIndex(h => h.includes('email') || h.includes('mail'));
-    const nameIdx = headers.findIndex(h => h.includes('nome') || h.includes('name') || h.includes('cliente'));
-    const phoneIdx = headers.findIndex(h => h.includes('tel') || h.includes('cel') || h.includes('phone') || h.includes('fone'));
-    const productIdx = headers.findIndex(h => h.includes('prod') || h.includes('plano') || h.includes('item') || h.includes('oferta'));
-    const statusIdx = headers.findIndex(h => h.includes('status') || h.includes('situacao') || h.includes('estado'));
+    let emailIdx = headers.findIndex(h => h.includes('email') || h.includes('mail'));
+    let nameIdx = headers.findIndex(h => h.includes('nome') || h.includes('name') || h.includes('cliente') || h.includes('comprador'));
+    let phoneIdx = headers.findIndex(h => h.includes('tel') || h.includes('cel') || h.includes('phone') || h.includes('fone'));
+    let productIdx = headers.findIndex(h => h.includes('prod') || h.includes('plano') || h.includes('item') || h.includes('oferta'));
+    let statusIdx = headers.findIndex(h => h.includes('status') || h.includes('situacao') || h.includes('estado'));
+
+    // Fallback: se não achou coluna de e-mail pelo cabeçalho, procura célula com @ na primeira linha de dados
+    if (emailIdx === -1 && lines.length > 1) {
+      const sampleRow = parseRow(lines[1]);
+      emailIdx = sampleRow.findIndex(cell => cell.includes('@') && cell.includes('.'));
+    }
 
     if (emailIdx === -1) {
-      return res.status(400).json({ error: 'Não foi possível encontrar a coluna de E-mail no cabeçalho do CSV.' });
+      return res.status(400).json({ error: 'Não foi possível identificar a coluna de E-mail no arquivo CSV.' });
     }
 
     const compradores = readJSON(COMPRADORES_FILE, []);
