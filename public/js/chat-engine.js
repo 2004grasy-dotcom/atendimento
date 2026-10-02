@@ -576,15 +576,56 @@ class TypebotChat {
         })
       });
       const data = await res.json();
-      const reply = data.answer || "Estou à disposição para te ajudar! Caso queira tirar mais dúvidas ou confirmar seu acesso, você pode clicar no botão acima para escolher seu plano ou me chamar no WhatsApp!";
-      this.renderBotMessage(reply);
-      this.playBeepSound();
+      const msgs = (data.messages && data.messages.length > 0) 
+        ? data.messages 
+        : ["Estou à disposição para te ajudar! Caso queira tirar mais dúvidas ou confirmar seu acesso, você pode clicar no botão acima para escolher seu plano ou me chamar no WhatsApp!"];
+
+      // Renderiza as mensagens consecutivas separadas, estilo WhatsApp real
+      for (let i = 0; i < msgs.length; i++) {
+        if (i > 0) {
+          await this.showTypingIndicator();
+        }
+        this.renderBotMessage(msgs[i]);
+        this.playBeepSound();
+      }
+
+      // Se a IA detectou intenção de compra ou pedido do link, renderiza o botão oficial de cadastro clicável!
+      if (data.wants_to_buy) {
+        this.renderBuyActionButtons();
+      }
     } catch (err) {
       console.error('Erro na IA:', err);
       this.renderBotMessage("Tive uma pequena oscilação aqui, mas você pode tirar qualquer dúvida diretamente no nosso WhatsApp pelo botão acima! ✨");
     }
 
     this.textInput.focus();
+  }
+
+  renderBuyActionButtons() {
+    const actionContainer = document.createElement('div');
+    actionContainer.className = 'flex flex-col gap-2.5 pl-10 pr-2 my-3 animate-pop-in max-w-2xl w-full mx-auto';
+
+    const buyBtn = document.createElement('a');
+    buyBtn.href = 'https://plataforma-oficial.lovable.app/';
+    buyBtn.target = '_blank';
+    buyBtn.rel = 'noopener noreferrer';
+    buyBtn.className = 'w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 px-6 rounded-xl shadow-lg hover:shadow-emerald-500/30 transition-all flex items-center justify-between text-base group cursor-pointer transform hover:-translate-y-0.5';
+    buyBtn.innerHTML = `
+      <span class="flex items-center gap-2">
+        <span class="text-xl">💳</span>
+        <span>Acessar Planos e Fazer Cadastro</span>
+      </span>
+      <svg class="w-5 h-5 text-white/90 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+    `;
+    buyBtn.addEventListener('click', () => {
+      this.answers['clicou_cadastro'] = true;
+      this.answers['etapa_atual'] = '🔥 Clicou em Cadastrar (após IA)';
+      this.saveLead();
+    });
+    actionContainer.appendChild(buyBtn);
+
+    this.chatContainer.appendChild(actionContainer);
+    this.scrollToBottom(false);
   }
 
   handleUserTextSubmit() {

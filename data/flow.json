@@ -27,14 +27,23 @@
         {
           "id": "opt_sim",
           "label": "✅ SIM QUERO",
-          "nextStepId": "step_objetivo"
+          "nextStepId": "step_pergunta_nome"
         }
       ]
     },
     {
+      "id": "step_pergunta_nome",
+      "type": "input_name",
+      "content": "Maravilha! Antes de continuarmos, qual o seu primeiro nome para a gente prosseguir o atendimento? 👇",
+      "placeholder": "Digite seu nome...",
+      "variable": "nome",
+      "delay": 500,
+      "nextStepId": "step_objetivo"
+    },
+    {
       "id": "step_objetivo",
       "type": "message",
-      "content": "Qual seu objetivo com os **Fabricantes e fornecedores**?",
+      "content": "Qual seu objetivo com os **Fabricantes e fornecedores**, {{nome}}?",
       "delay": 800,
       "nextStepId": "step_opt_objetivo"
     },
@@ -59,7 +68,7 @@
     {
       "id": "step_perfeito",
       "type": "message",
-      "content": "Perfeito!! ✨",
+      "content": "Perfeito, {{nome}}!! ✨",
       "delay": 1000,
       "nextStepId": "step_audio_1"
     },
@@ -154,7 +163,7 @@
     {
       "id": "step_aviso_pagamento",
       "type": "message",
-      "content": "**Certo, vou te enviar o link de pagamento, ok?**\n\nLembrando que o link é para você acessar e preencher seu cadastro!",
+      "content": "**Certo {{nome}}, vou te enviar o link de pagamento, ok?**\n\nLembrando que o link é para você acessar e preencher seu cadastro!",
       "delay": 1500,
       "nextStepId": "step_link_planos"
     },
@@ -174,7 +183,7 @@
     {
       "id": "step_final_instrucoes",
       "type": "message",
-      "content": "Assim que preencher seu cadastro e efetuar o pagamento, me avise no WhatsApp! Que vou te passar o acesso, combinado?\n\nO acesso também é enviado por e-mail no ato da compra e o suporte vai te chamar no WhatsApp!",
+      "content": "Assim que preencher seu cadastro e efetuar o pagamento, me avise no WhatsApp, {{nome}}! Que vou te passar o acesso, combinado?\n\nO acesso também é enviado por e-mail no ato da compra e o suporte vai te chamar no WhatsApp!",
       "delay": 1500,
       "nextStepId": "step_cta_whatsapp"
     },
@@ -183,7 +192,7 @@
       "type": "redirect_whatsapp",
       "content": "Se tiver qualquer dúvida ou assim que finalizar seu pagamento, clique abaixo:",
       "buttonText": "Falar com Suporte no WhatsApp 💬",
-      "customMessage": "Olá! Fiz meu cadastro na plataforma e gostaria de confirmar meu acesso."
+      "customMessage": "Olá! Sou {{nome}}, fiz meu cadastro na plataforma e gostaria de confirmar meu acesso."
     }
   ]
 }

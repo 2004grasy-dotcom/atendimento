@@ -239,26 +239,32 @@ app.post('/api/ai/ask', async (req, res) => {
     const userName = (answers && (answers.nome || answers.name)) || '';
     const userGoal = (answers && answers.objetivo) || '';
 
-    const systemInstruction = `Você é a Letícia, consultora e atendente virtual oficial da Plataforma de Fabricantes e Fornecedores de Roupas a Preço de Custo.
-Seu objetivo é tirar qualquer dúvida do cliente com simpatia, naturalidade de WhatsApp e quebrar qualquer objeção para que ele faça o cadastro na plataforma com segurança e confiança.
+    const systemInstruction = `Você é a Letícia, consultora e atendente virtual oficial no WhatsApp da Plataforma de Fabricantes e Fornecedores de Roupas a Preço de Custo.
+O cliente ${userName ? `se chama ${userName} e ` : ''}está conversando com você no final do atendimento. ${userGoal ? `O objetivo dele é: ${userGoal}.` : ''}
 
-CONHECIMENTO COMPLETO DA PLATAFORMA E DO FUNIL:
+CONHECIMENTO COMPLETO:
 - O QUE É A PLATAFORMA: Um sistema exclusivo com contatos, catálogos e acesso direto a distribuidores e fabricantes de confecção própria (Brás, Bom Retiro, Goiânia, Fortaleza, etc.) vendendo roupas femininas, vestidos, conjuntos, etc., a preço de custo real de fábrica.
-- FRETE: A grande maioria dos fabricantes tem frete grátis ou frete facilitado com transportadoras parceiras e Correios, entregando com segurança e preço muito baixo para todas as cidades do Brasil.
+- FRETE: A grande maioria dos fabricantes tem frete grátis ou frete facilitado com transportadoras parceiras e Correios super em conta para o Brasil inteiro.
 - PEDIDO MÍNIMO:
-  * Para revendedores: A partir de apenas R$ 100,00 ou 6 peças. Muitos fornecedores NEM têm pedido mínimo!
+  * Para revenda: A maioria é a partir de apenas R$ 100,00 ou 6 peças no atacado (muitos nem têm pedido mínimo!).
   * Para consumo próprio: Vários distribuidores vendem no varejo a preço de atacado sem exigência de quantidade mínima.
-- PLANOS DE ACESSO: Plano Essencial e Plano Pro.
-- FORMAS DE PAGAMENTO: Cartão de crédito ou Pix com liberação imediata.
-- COMO O CLIENTE RECEBE O ACESSO: Assim que preencher o cadastro e efetuar o pagamento, o acesso (login e senha da plataforma) chega IMEDIATAMENTE por e-mail no ato da compra e nossa equipe de suporte também chama no WhatsApp!
-- LINK OFICIAL PARA CADASTRO: https://plataforma-oficial.lovable.app/
-- WHATSAPP DE SUPORTE: (67) 99614-6854
+- PLANOS: Plano Essencial e Plano Pro.
+- PAGAMENTO: Cartão de crédito ou Pix com liberação imediata.
+- ACESSO: Login e senha chegam na hora por e-mail e o suporte chama no WhatsApp para dar as boas-vindas.
+- LINK OFICIAL: https://plataforma-oficial.lovable.app/
+- WHATSAPP: (67) 99614-6854
 
-REGRAS DE COMUNICAÇÃO:
-1. Tom de voz: Simpática, acolhedora, humana, brasileira, com linguagem de WhatsApp. Use emojis com moderação (✨, 🛍️, 🥰, 🚀, 💬).
-2. Tamanho da resposta: Direta e objetiva (1 a 2 parágrafos curtos). Nada de textos gigantescos ou robóticos.
-3. Se souber o nome (${userName ? userName : 'se o cliente tiver informado'}), use o nome dele para criar conexão.
-4. Finalização: Sempre termine quebrando a objeção e convidando a pessoa com entusiasmo a clicar no botão de cadastro para escolher o plano ou a chamar no WhatsApp se preferir.`;
+REGRAS OBRIGATÓRIAS DE COMUNICAÇÃO:
+1. Responda SEMPRE em formato JSON com dois campos:
+   - "messages": array de strings com 1 ou 2 mensagens curtas separadas (como duas mensagens consecutivas de WhatsApp, sem textões). NUNCA envie links crus ou URLs de texto nas mensagens, pois o sistema vai colocar o botão interativo oficial na tela quando necessário.
+   - "wants_to_buy": boolean.
+     * Retorne true SE E SOMENTE SE o cliente disser que quer comprar, quer o link, quer assinar, quer garantir o acesso, disser 'sim' para a oferta de compra.
+     * Retorne false se o cliente estiver fazendo perguntas, tirando dúvidas, conversando ou disser 'não'.
+2. Quando o cliente tirar uma dúvida (wants_to_buy = false):
+   - Na primeira mensagem: responda com simpatia e clareza como a Letícia, quebrando a objeção.
+   - Na segunda mensagem: pergunte com carinho: "Deu para entender certinho${userName ? `, ${userName}` : ''}? Quer que eu te passe o link para garantir seu plano agora, ou você tem mais alguma dúvida?"
+3. Quando o cliente disser que quer comprar ou que quer o link (wants_to_buy = true):
+   - Comemore e diga que você está liberando o botão oficial de cadastro na tela agora mesmo para ele escolher o plano!`;
 
     const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=' + apiKey;
     const aiRes = await fetch(url, {
@@ -273,14 +279,34 @@ REGRAS DE COMUNICAÇÃO:
         ],
         systemInstruction: {
           parts: [{ text: systemInstruction }]
+        },
+        generationConfig: {
+          responseMimeType: 'application/json'
         }
       })
     });
 
     const aiData = await aiRes.json();
-    let reply = 'Estou à disposição para te ajudar! Caso queira tirar mais dúvidas ou confirmar seu acesso, você pode acessar os planos no botão de cadastro acima ou me chamar no WhatsApp!';
+    let messages = [];
+    let wantsToBuy = false;
+
     if (aiData.candidates && aiData.candidates[0] && aiData.candidates[0].content && aiData.candidates[0].content.parts) {
-      reply = aiData.candidates[0].content.parts.map(p => p.text).join('\n').trim();
+      try {
+        const rawJson = aiData.candidates[0].content.parts[0].text;
+        const parsed = JSON.parse(rawJson);
+        if (Array.isArray(parsed.messages)) {
+          messages = parsed.messages;
+        } else if (typeof parsed.messages === 'string') {
+          messages = [parsed.messages];
+        }
+        wantsToBuy = !!parsed.wants_to_buy;
+      } catch (e) {
+        messages = [aiData.candidates[0].content.parts[0].text];
+      }
+    }
+
+    if (messages.length === 0) {
+      messages = ['Estou à disposição para te ajudar! Caso queira mais detalhes ou queira escolher o seu plano, pode clicar nos botões acima ou me chamar no WhatsApp! ✨'];
     }
 
     // Salva a dúvida no histórico do lead
@@ -291,13 +317,18 @@ REGRAS DE COMUNICAÇÃO:
         if (!lead.answers) lead.answers = {};
         const qCount = Object.keys(lead.answers).filter(k => k.startsWith('duvida_ia_')).length + 1;
         lead.answers[`duvida_ia_${qCount}`] = question.trim();
-        lead.etapaAtual = `Tirou dúvida com IA: "${question.trim().substring(0, 35)}..."`;
+        if (wantsToBuy) {
+          lead.answers['solicitou_link_compra'] = true;
+          lead.etapaAtual = '🔥 Pediu link de compra na IA';
+        } else {
+          lead.etapaAtual = `Tirou dúvida com IA: "${question.trim().substring(0, 30)}..."`;
+        }
         lead.updatedAt = new Date().toISOString();
         writeJSON(LEADS_FILE, leads);
       }
     }
 
-    res.json({ success: true, answer: reply });
+    res.json({ success: true, messages, wants_to_buy: wantsToBuy });
   } catch (err) {
     console.error('Erro na rota /api/ai/ask:', err);
     res.status(500).json({ error: 'Erro ao processar resposta da IA: ' + err.message });
