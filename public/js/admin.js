@@ -436,7 +436,7 @@ function populateSettingsInputs() {
   document.getElementById('setting-bot-name').value = s.botName || '';
   document.getElementById('setting-bot-subtitle').value = s.botSubtitle || '';
   document.getElementById('setting-bot-avatar').value = s.botAvatar || '';
-  document.getElementById('avatar-preview-img').src = s.botAvatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=VirtualBot';
+  document.getElementById('avatar-preview-img').src = s.botAvatar || '/images/leticia.jpg';
   document.getElementById('setting-primary-color').value = s.primaryColor || '#4F46E5';
   document.getElementById('setting-primary-color-text').value = s.primaryColor || '#4F46E5';
   document.getElementById('setting-company-whatsapp').value = s.companyWhatsapp || '';

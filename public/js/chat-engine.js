@@ -19,6 +19,7 @@ class TypebotChat {
     this.sendBtn = document.getElementById('send-btn');
     this.audioEnabled = true;
 
+    window.chatInstance = this;
     this.init();
   }
 
@@ -56,6 +57,8 @@ class TypebotChat {
   }
 
   setupEventListeners() {
+    this.setupScrollListener();
+
     this.inputForm.addEventListener('submit', (e) => {
       e.preventDefault();
       this.handleUserTextSubmit();
@@ -244,17 +247,17 @@ class TypebotChat {
     const typingId = 'typing-indicator-' + Date.now();
     const typingEl = document.createElement('div');
     typingEl.id = typingId;
-    typingEl.className = 'flex items-end gap-2 animate-pop-in';
+    typingEl.className = 'flex items-end gap-2.5 animate-pop-in max-w-2xl w-full mx-auto mb-2';
     typingEl.innerHTML = `
-      <img src="${this.flow.settings.botAvatar}" class="w-8 h-8 rounded-full shadow-sm flex-shrink-0 bg-white p-0.5 border border-gray-200">
-      <div class="bg-gray-100 text-gray-800 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm inline-flex items-center gap-1.5">
+      <img src="${this.flow.settings.botAvatar}" class="w-8 h-8 rounded-full shadow-sm flex-shrink-0 bg-white p-0.5 border border-gray-200 object-cover">
+      <div class="bg-white text-gray-800 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm inline-flex items-center gap-1.5 border border-gray-100">
         <span class="typing-dot"></span>
         <span class="typing-dot"></span>
         <span class="typing-dot"></span>
       </div>
     `;
     this.chatContainer.appendChild(typingEl);
-    this.scrollToBottom();
+    this.scrollToBottom(false);
 
     return new Promise(resolve => {
       setTimeout(() => {
@@ -269,28 +272,28 @@ class TypebotChat {
   renderBotMessage(text) {
     const formatted = this.formatMarkdown(text);
     const msgEl = document.createElement('div');
-    msgEl.className = 'flex items-end gap-2.5 animate-pop-in mb-3';
+    msgEl.className = 'flex items-end gap-2.5 animate-pop-in mb-3 max-w-2xl w-full mx-auto';
     msgEl.innerHTML = `
-      <img src="${this.flow.settings.botAvatar}" class="w-8 h-8 rounded-full shadow-sm flex-shrink-0 bg-white p-0.5 border border-gray-200">
+      <img src="${this.flow.settings.botAvatar}" class="w-8 h-8 rounded-full shadow-sm flex-shrink-0 bg-white p-0.5 border border-gray-200 object-cover">
       <div class="bg-white border border-gray-100 text-gray-800 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm max-w-[85%] text-sm md:text-base leading-relaxed break-words">
         ${formatted}
       </div>
     `;
     this.chatContainer.appendChild(msgEl);
-    this.scrollToBottom();
+    this.scrollToBottom(false);
   }
 
   renderUserMessage(text) {
-    const primaryBg = this.flow.settings.primaryColor || '#4F46E5';
+    const primaryBg = this.flow.settings.primaryColor || '#598E71';
     const msgEl = document.createElement('div');
-    msgEl.className = 'flex justify-end animate-pop-in mb-3';
+    msgEl.className = 'flex justify-end animate-pop-in mb-3 max-w-2xl w-full mx-auto';
     msgEl.innerHTML = `
       <div style="background-color: ${primaryBg}" class="text-white rounded-2xl rounded-br-sm px-4 py-2.5 shadow-sm max-w-[85%] text-sm md:text-base leading-relaxed break-words font-medium">
         ${this.escapeHtml(text)}
       </div>
     `;
     this.chatContainer.appendChild(msgEl);
-    this.scrollToBottom();
+    this.scrollToBottom(true);
   }
 
   renderAudioMessage(step) {
@@ -299,9 +302,9 @@ class TypebotChat {
     const primaryBg = this.flow.settings.primaryColor || '#598E71';
 
     const msgEl = document.createElement('div');
-    msgEl.className = 'flex items-end gap-2.5 animate-pop-in mb-3';
+    msgEl.className = 'flex items-end gap-2.5 animate-pop-in mb-3 max-w-2xl w-full mx-auto';
     msgEl.innerHTML = `
-      <img src="${this.flow.settings.botAvatar}" class="w-8 h-8 rounded-full shadow-sm flex-shrink-0 bg-white p-0.5 border border-gray-200">
+      <img src="${this.flow.settings.botAvatar}" class="w-8 h-8 rounded-full shadow-sm flex-shrink-0 bg-white p-0.5 border border-gray-200 object-cover">
       <div class="bg-white border border-gray-200/90 rounded-2xl rounded-bl-sm p-3.5 shadow-sm max-w-[90%] sm:max-w-xs w-full flex items-center gap-3">
         <audio id="${audioId}" src="${audioUrl}" preload="metadata"></audio>
         <button type="button" class="audio-play-btn w-10 h-10 rounded-full flex items-center justify-center text-white flex-shrink-0 shadow-md transition-transform transform active:scale-95" style="background-color: ${primaryBg}">
@@ -379,15 +382,15 @@ class TypebotChat {
     });
 
     this.chatContainer.appendChild(msgEl);
-    this.scrollToBottom();
+    this.scrollToBottom(false);
   }
 
   renderImageMessage(step) {
     const imageUrl = step.imageUrl || (step.content && step.content.url) || '';
     const msgEl = document.createElement('div');
-    msgEl.className = 'flex items-end gap-2.5 animate-pop-in mb-3';
+    msgEl.className = 'flex items-end gap-2.5 animate-pop-in mb-3 max-w-2xl w-full mx-auto';
     msgEl.innerHTML = `
-      <img src="${this.flow.settings.botAvatar}" class="w-8 h-8 rounded-full shadow-sm flex-shrink-0 bg-white p-0.5 border border-gray-200">
+      <img src="${this.flow.settings.botAvatar}" class="w-8 h-8 rounded-full shadow-sm flex-shrink-0 bg-white p-0.5 border border-gray-200 object-cover">
       <div class="bg-white border border-gray-200/90 rounded-2xl rounded-bl-sm p-1.5 shadow-sm max-w-[85%] cursor-pointer group" onclick="openLightbox('${imageUrl}')">
         <img src="${imageUrl}" alt="Imagem do fluxo" class="rounded-xl max-h-72 w-auto object-cover group-hover:opacity-90 transition-all shadow-xs">
         <div class="text-[11px] text-emerald-700 font-semibold text-right px-1 pt-1 flex items-center justify-end gap-1">
@@ -396,17 +399,17 @@ class TypebotChat {
       </div>
     `;
     this.chatContainer.appendChild(msgEl);
-    this.scrollToBottom();
+    this.scrollToBottom(false);
     this.saveStateToStorage();
   }
 
   renderButtons(step) {
     const optionsContainer = document.createElement('div');
-    optionsContainer.className = 'flex flex-col gap-2 pl-10 pr-2 my-2 animate-pop-in';
+    optionsContainer.className = 'flex flex-col gap-2 pl-10 pr-2 my-2 animate-pop-in max-w-2xl w-full mx-auto';
 
     step.options.forEach(opt => {
       const btn = document.createElement('button');
-      btn.className = 'w-full text-left bg-white hover:bg-emerald-50 border-2 border-emerald-200 hover:border-emerald-600 text-gray-800 font-medium py-3 px-4 rounded-xl shadow-sm transition-all duration-200 flex items-center justify-between group';
+      btn.className = 'w-full text-left bg-white hover:bg-emerald-50 border-2 border-emerald-200 hover:border-emerald-600 text-gray-800 font-medium py-3 px-4 rounded-xl shadow-sm transition-all duration-200 flex items-center justify-between group cursor-pointer';
 
       if (opt.url) {
         btn.innerHTML = `
@@ -455,12 +458,12 @@ class TypebotChat {
     });
 
     this.chatContainer.appendChild(optionsContainer);
-    this.scrollToBottom();
+    this.scrollToBottom(false);
   }
 
   renderRatingStars(step) {
     const container = document.createElement('div');
-    container.className = 'flex items-center justify-center gap-2 pl-10 pr-2 my-3 p-3 bg-white/70 rounded-2xl border border-gray-100 animate-pop-in';
+    container.className = 'flex items-center justify-center gap-2 pl-10 pr-2 my-3 p-3 bg-white/70 rounded-2xl border border-gray-100 animate-pop-in max-w-2xl w-full mx-auto';
 
     for (let star = 1; star <= 5; star++) {
       const starBtn = document.createElement('button');
@@ -484,7 +487,7 @@ class TypebotChat {
     }
 
     this.chatContainer.appendChild(container);
-    this.scrollToBottom();
+    this.scrollToBottom(false);
   }
 
   renderWhatsappCTA(step) {
@@ -500,7 +503,7 @@ class TypebotChat {
     this.saveLead();
 
     const ctaContainer = document.createElement('div');
-    ctaContainer.className = 'pl-10 pr-2 my-4 animate-pop-in';
+    ctaContainer.className = 'pl-10 pr-2 my-4 animate-pop-in max-w-2xl w-full mx-auto';
     ctaContainer.innerHTML = `
       <a href="${waLink}" target="_blank" rel="noopener noreferrer" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 px-6 rounded-xl shadow-lg hover:shadow-emerald-500/30 transition-all flex items-center justify-center gap-3 text-base text-center transform hover:-translate-y-0.5">
         <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.006c.106.005.249-.04.39.298.144.347.491 1.2.534 1.287.043.087.072.188.014.304-.058.116-.087.188-.173.289l-.26.304c-.087.086-.177.18-.076.353.101.173.449.741.964 1.2 1.349 1.2 2.378 1.385 2.68 1.488.246.084.391-.014.536-.145.144-.13.621-.724.787-.97.166-.246.332-.202.557-.116.224.087 1.423.67 1.668.793.245.122.408.181.468.283.06.101.06 1.055-.084 1.46z"/></svg>
@@ -521,7 +524,7 @@ class TypebotChat {
     }
 
     this.chatContainer.appendChild(ctaContainer);
-    this.scrollToBottom();
+    this.scrollToBottom(false);
   }
 
   showTextInput(step) {
@@ -637,10 +640,52 @@ class TypebotChat {
       .replace(/'/g, '&#039;');
   }
 
-  scrollToBottom() {
+  setupScrollListener() {
+    this.newMessagesPill = document.getElementById('new-messages-pill');
+    if (this.chatContainer) {
+      this.chatContainer.addEventListener('scroll', () => {
+        if (!this.isUserScrolledUp()) {
+          this.hideNewMessageAlert();
+        }
+      }, { passive: true });
+    }
+  }
+
+  isUserScrolledUp() {
+    if (!this.chatContainer) return false;
+    // Se a distância do scroll até o fundo for maior que 130px, o usuário está lendo mensagens anteriores
+    const distanceToBottom = this.chatContainer.scrollHeight - this.chatContainer.scrollTop - this.chatContainer.clientHeight;
+    return distanceToBottom > 130;
+  }
+
+  showNewMessageAlert() {
+    if (this.newMessagesPill) {
+      this.newMessagesPill.classList.remove('hidden');
+    }
+  }
+
+  hideNewMessageAlert() {
+    if (this.newMessagesPill) {
+      this.newMessagesPill.classList.add('hidden');
+    }
+  }
+
+  scrollToBottom(force = false) {
+    if (!this.chatContainer) return;
+
+    // Se o usuário rolou para cima e a nova mensagem veio do bot, NÃO força o scroll para não atrapalhar a leitura!
+    if (!force && this.isUserScrolledUp()) {
+      this.showNewMessageAlert();
+      return;
+    }
+
+    this.hideNewMessageAlert();
     setTimeout(() => {
-      this.chatContainer.scrollTop = this.chatContainer.scrollHeight;
-    }, 50);
+      this.chatContainer.scrollTo({
+        top: this.chatContainer.scrollHeight,
+        behavior: 'smooth'
+      });
+    }, 60);
   }
 
   playBeepSound() {
