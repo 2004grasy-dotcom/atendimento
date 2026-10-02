@@ -99,6 +99,7 @@ class TypebotChat {
         this.answers = savedAnswers ? JSON.parse(savedAnswers) : {};
         this.currentStepId = savedStep;
         this.scrollToBottom();
+        this.rebindAllAudioPlayers();
         // Se o passo atual ainda precisa de input do usuário, exibe
         const step = this.getStepById(savedStep);
         if (step && ['input_text', 'input_name', 'input_email', 'input_phone'].includes(step.type)) {
@@ -297,6 +298,123 @@ class TypebotChat {
     this.scrollToBottom(true);
   }
 
+  setupAudioPlayer(cardEl, autoPlay = false) {
+    if (!cardEl || cardEl.dataset.initialized === 'true') return;
+    cardEl.dataset.initialized = 'true';
+
+    const audioElement = cardEl.querySelector('audio');
+    const playBtn = cardEl.querySelector('.audio-play-btn');
+    const playIcon = cardEl.querySelector('.play-icon');
+    const pauseIcon = cardEl.querySelector('.pause-icon');
+    const timeDisplay = cardEl.querySelector('.audio-time');
+    const durationDisplay = cardEl.querySelector('.audio-duration');
+    const progressFill = cardEl.querySelector('.audio-progress-fill');
+    const progressBar = cardEl.querySelector('.audio-progress-bar');
+
+    if (!audioElement) return;
+
+    const formatSec = (sec) => {
+      if (!sec || isNaN(sec) || !isFinite(sec)) return '0:00';
+      const m = Math.floor(sec / 60);
+      const s = Math.floor(sec % 60);
+      return `${m}:${s < 10 ? '0' : ''}${s}`;
+    };
+
+    const updateDuration = () => {
+      if (audioElement.duration && !isNaN(audioElement.duration) && isFinite(audioElement.duration)) {
+        durationDisplay.textContent = formatSec(audioElement.duration);
+      }
+    };
+
+    audioElement.addEventListener('loadedmetadata', updateDuration);
+    audioElement.addEventListener('durationchange', updateDuration);
+    audioElement.addEventListener('canplay', updateDuration);
+    if (audioElement.duration && !isNaN(audioElement.duration)) {
+      updateDuration();
+    }
+
+    audioElement.addEventListener('timeupdate', () => {
+      timeDisplay.textContent = formatSec(audioElement.currentTime);
+      if (audioElement.duration && !isNaN(audioElement.duration)) {
+        const pct = (audioElement.currentTime / audioElement.duration) * 100;
+        progressFill.style.width = pct + '%';
+      }
+    });
+
+    audioElement.addEventListener('ended', () => {
+      playIcon?.classList.remove('hidden');
+      pauseIcon?.classList.add('hidden');
+      if (progressFill) progressFill.style.width = '0%';
+      if (timeDisplay) timeDisplay.textContent = '0:00';
+    });
+
+    audioElement.addEventListener('pause', () => {
+      playIcon?.classList.remove('hidden');
+      pauseIcon?.classList.add('hidden');
+    });
+
+    audioElement.addEventListener('play', () => {
+      // Pausa outros players
+      document.querySelectorAll('audio').forEach(other => {
+        if (other !== audioElement && !other.paused) {
+          other.pause();
+        }
+      });
+      playIcon?.classList.add('hidden');
+      pauseIcon?.classList.remove('hidden');
+    });
+
+    const togglePlay = (e) => {
+      if (e) e.stopPropagation();
+      if (audioElement.paused) {
+        audioElement.play().catch(err => {
+          console.warn('Playback error / blocked by browser:', err);
+        });
+      } else {
+        audioElement.pause();
+      }
+    };
+
+    if (playBtn) {
+      playBtn.addEventListener('click', togglePlay);
+    }
+
+    // Clicar em qualquer parte do card (exceto na barra de progresso) também inicia o áudio
+    cardEl.addEventListener('click', (e) => {
+      if (e.target.closest('.audio-progress-bar')) return;
+      togglePlay(e);
+    });
+
+    if (progressBar) {
+      progressBar.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const rect = progressBar.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const pct = Math.max(0, Math.min(1, clickX / rect.width));
+        if (audioElement.duration && !isNaN(audioElement.duration)) {
+          audioElement.currentTime = pct * audioElement.duration;
+          progressFill.style.width = (pct * 100) + '%';
+        }
+      });
+    }
+
+    if (autoPlay) {
+      setTimeout(() => {
+        audioElement.play().catch(err => {
+          console.log('Autoplay do áudio pausado pelo navegador, aguardando clique:', err);
+        });
+      }, 250);
+    }
+  }
+
+  rebindAllAudioPlayers() {
+    if (!this.chatContainer) return;
+    this.chatContainer.querySelectorAll('.audio-player-card').forEach(card => {
+      card.dataset.initialized = 'false';
+      this.setupAudioPlayer(card, false);
+    });
+  }
+
   renderAudioMessage(step) {
     const audioUrl = step.audioUrl || (step.content && step.content.url) || '';
     const audioId = 'audio-' + Math.random().toString(36).substring(2, 8);
@@ -306,9 +424,11 @@ class TypebotChat {
     msgEl.className = 'flex items-end gap-2.5 animate-pop-in mb-3 max-w-2xl w-full mx-auto';
     msgEl.innerHTML = `
       <img src="${this.flow.settings.botAvatar}" class="w-8 h-8 rounded-full shadow-sm flex-shrink-0 bg-white p-0.5 border border-gray-200 object-cover">
-      <div class="bg-white border border-gray-200/90 rounded-2xl rounded-bl-sm p-3.5 shadow-sm max-w-[90%] sm:max-w-xs w-full flex items-center gap-3">
-        <audio id="${audioId}" src="${audioUrl}" preload="metadata"></audio>
-        <button type="button" class="audio-play-btn w-10 h-10 rounded-full flex items-center justify-center text-white flex-shrink-0 shadow-md transition-transform transform active:scale-95" style="background-color: ${primaryBg}">
+      <div class="audio-player-card bg-white border border-gray-200/90 hover:border-emerald-400 rounded-2xl rounded-bl-sm p-3.5 shadow-sm max-w-[90%] sm:max-w-xs w-full flex items-center gap-3 cursor-pointer select-none transition-all">
+        <audio id="${audioId}" src="${audioUrl}" preload="auto" playsinline webkit-playsinline>
+          <source src="${audioUrl}" type="audio/mpeg">
+        </audio>
+        <button type="button" class="audio-play-btn w-10 h-10 rounded-full flex items-center justify-center text-white flex-shrink-0 shadow-md transition-transform transform active:scale-95 cursor-pointer" style="background-color: ${primaryBg}">
           <svg class="w-5 h-5 play-icon ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
           <svg class="w-5 h-5 pause-icon hidden" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
         </button>
@@ -317,73 +437,19 @@ class TypebotChat {
             <span class="audio-time">0:00</span>
             <span class="audio-duration">🎙️ Áudio</span>
           </div>
-          <div class="audio-progress-bar w-full bg-gray-200 h-1.5 rounded-full overflow-hidden cursor-pointer relative">
+          <div class="audio-progress-bar w-full bg-gray-200 h-2 rounded-full overflow-hidden cursor-pointer relative py-0.5">
             <div class="audio-progress-fill h-full rounded-full transition-all" style="width: 0%; background-color: ${primaryBg}"></div>
           </div>
         </div>
       </div>
     `;
 
-    const audioElement = msgEl.querySelector(`#${audioId}`);
-    const playBtn = msgEl.querySelector('.audio-play-btn');
-    const playIcon = msgEl.querySelector('.play-icon');
-    const pauseIcon = msgEl.querySelector('.pause-icon');
-    const timeDisplay = msgEl.querySelector('.audio-time');
-    const durationDisplay = msgEl.querySelector('.audio-duration');
-    const progressFill = msgEl.querySelector('.audio-progress-fill');
-    const progressBar = msgEl.querySelector('.audio-progress-bar');
-
-    const formatSec = (sec) => {
-      if (!sec || isNaN(sec)) return '0:00';
-      const m = Math.floor(sec / 60);
-      const s = Math.floor(sec % 60);
-      return `${m}:${s < 10 ? '0' : ''}${s}`;
-    };
-
-    audioElement.addEventListener('loadedmetadata', () => {
-      durationDisplay.textContent = formatSec(audioElement.duration);
-    });
-
-    audioElement.addEventListener('timeupdate', () => {
-      timeDisplay.textContent = formatSec(audioElement.currentTime);
-      if (audioElement.duration) {
-        const pct = (audioElement.currentTime / audioElement.duration) * 100;
-        progressFill.style.width = pct + '%';
-      }
-    });
-
-    audioElement.addEventListener('ended', () => {
-      playIcon.classList.remove('hidden');
-      pauseIcon.classList.add('hidden');
-      progressFill.style.width = '0%';
-      timeDisplay.textContent = '0:00';
-    });
-
-    playBtn.addEventListener('click', () => {
-      if (audioElement.paused) {
-        document.querySelectorAll('audio').forEach(a => { if (a !== audioElement) a.pause(); });
-        audioElement.play().then(() => {
-          playIcon.classList.add('hidden');
-          pauseIcon.classList.remove('hidden');
-        }).catch(err => console.warn('Autoplay error:', err));
-      } else {
-        audioElement.pause();
-        playIcon.classList.remove('hidden');
-        pauseIcon.classList.add('hidden');
-      }
-    });
-
-    progressBar.addEventListener('click', (e) => {
-      const rect = progressBar.getBoundingClientRect();
-      const clickX = e.clientX - rect.left;
-      const pct = clickX / rect.width;
-      if (audioElement.duration) {
-        audioElement.currentTime = pct * audioElement.duration;
-      }
-    });
-
     this.chatContainer.appendChild(msgEl);
     this.scrollToBottom(false);
+
+    const card = msgEl.querySelector('.audio-player-card');
+    this.setupAudioPlayer(card, true);
+    this.saveStateToStorage();
   }
 
   renderImageMessage(step) {

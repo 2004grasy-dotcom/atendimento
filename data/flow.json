@@ -76,7 +76,7 @@
       "id": "step_audio_1",
       "type": "audio",
       "content": "Mensagem de voz sobre a plataforma",
-      "audioUrl": "https://s3.typebotstorage.com/public/workspaces/cm5lrx2mv0003dr9z90qztvzu/typebots/itpv7wbdipjbm3bxd7ervs8s/blocks/iwyf2lx288s2hfvkekcalyod?v=1790682096260",
+      "audioUrl": "/audio/audio_explicacao_plataforma.mp3",
       "delay": 4500,
       "nextStepId": "step_info_plataforma"
     },
@@ -128,7 +128,7 @@
       "id": "step_audio_2",
       "type": "audio",
       "content": "Áudio explicativo dos planos",
-      "audioUrl": "https://s3.typebotstorage.com/public/workspaces/cm5lrx2mv0003dr9z90qztvzu/typebots/itpv7wbdipjbm3bxd7ervs8s/blocks/ykprcskf6o353scmw7kxhe69?v=1790682119782",
+      "audioUrl": "/audio/audio_explicacao_planos.mp3",
       "delay": 5000,
       "nextStepId": "step_categorias_txt"
     },
