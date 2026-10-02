@@ -9,7 +9,18 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
+
+const PUBLIC_DIR = path.join(__dirname, 'public');
+
+// Rota raiz inteligente: se o domínio for suporte-leticia ou DEFAULT_PAGE=suporte, serve suporte.html na raiz /
+app.get('/', (req, res) => {
+  if (process.env.DEFAULT_PAGE === 'suporte' || (req.hostname && req.hostname.toLowerCase().includes('suporte'))) {
+    return res.sendFile('suporte.html', { root: PUBLIC_DIR });
+  }
+  res.sendFile('index.html', { root: PUBLIC_DIR });
+});
+
+app.use(express.static(PUBLIC_DIR, { index: false }));
 
 const DATA_DIR = path.join(__dirname, 'data');
 const FLOW_FILE = path.join(DATA_DIR, 'flow.json');
@@ -698,9 +709,6 @@ app.delete('/api/compradores/:email', (req, res) => {
   writeJSON(COMPRADORES_FILE, compradores);
   res.json({ success: true, message: 'Comprador removido' });
 });
-
-// Rota padrão do Viewer e Admin
-const PUBLIC_DIR = path.join(__dirname, 'public');
 
 app.get('/admin', (req, res) => {
   res.sendFile('admin.html', { root: PUBLIC_DIR });
