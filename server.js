@@ -437,6 +437,18 @@ app.post('/api/webhooks/cactus', (req, res) => {
     });
 
     writeJSON(COMPRADORES_FILE, compradores);
+
+    // Sincronização automática entre os dois serviços (atendimento <-> suporte)
+    if (!req.headers['x-forwarded-sync']) {
+      const isSuporte = req.hostname && req.hostname.toLowerCase().includes('suporte');
+      const targetHost = isSuporte ? 'https://atendimento-leticia.up.railway.app' : 'https://suporte-leticia.up.railway.app';
+      fetch(`${targetHost}/api/webhooks/cactus`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-forwarded-sync': 'true' },
+        body: JSON.stringify(payload)
+      }).catch(err => console.warn('Sync webhook aviso:', err.message));
+    }
+
     res.status(200).json({ success: true, message: `${novosCompradores} comprador(es) registrado(s) com sucesso.` });
   } catch (err) {
     console.error('Erro ao processar webhook Cactus:', err);
@@ -447,7 +459,7 @@ app.post('/api/webhooks/cactus', (req, res) => {
 // ==========================================
 // CHAT DE SUPORTE E ENTREGA PÓS-COMPRA
 // ==========================================
-app.post('/api/suporte/verificar', (req, res) => {
+app.post('/api/suporte/verificar', async (req, res) => {
   try {
     const { email } = req.body;
     if (!email || !email.trim()) {
@@ -455,8 +467,52 @@ app.post('/api/suporte/verificar', (req, res) => {
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    const compradores = readJSON(COMPRADORES_FILE, []);
-    const comprador = compradores.find(c => c.email && c.email.toLowerCase() === cleanEmail);
+    let compradores = readJSON(COMPRADORES_FILE, []);
+    let comprador = compradores.find(c => c.email && c.email.toLowerCase().trim() === cleanEmail);
+
+    // 1. Se não encontrou na lista de compradores, verifica em leads.json
+    if (!comprador) {
+      const leads = readJSON(LEADS_FILE, []);
+      const lead = leads.find(l => {
+        const leadEmail = (l.email || (l.answers && (l.answers.email || l.answers.e_mail)) || '').toLowerCase().trim();
+        return leadEmail === cleanEmail;
+      });
+      if (lead) {
+        comprador = {
+          name: lead.name || (lead.answers && lead.answers.nome) || 'Cliente',
+          email: cleanEmail,
+          product: 'Plataforma + Grupo VIP',
+          paidAt: lead.createdAt || new Date().toISOString()
+        };
+      }
+    }
+
+    // 2. Se ainda não encontrou e a requisição veio sem flag interna, consulta o serviço irmão
+    if (!comprador && !req.headers['x-internal-lookup']) {
+      const isSuporte = req.hostname && req.hostname.toLowerCase().includes('suporte');
+      const targetHost = isSuporte ? 'https://atendimento-leticia.up.railway.app' : 'https://suporte-leticia.up.railway.app';
+      try {
+        const remoteRes = await fetch(`${targetHost}/api/suporte/verificar`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-internal-lookup': 'true' },
+          body: JSON.stringify({ email: cleanEmail })
+        });
+        const remoteData = await remoteRes.json();
+        if (remoteData.success && remoteData.encontrado && remoteData.comprador) {
+          comprador = remoteData.comprador;
+          // Salva no banco local para consultas subsequentes imediatas
+          compradores.unshift({
+            ...comprador,
+            id: 'sync_' + Date.now().toString(36),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+          writeJSON(COMPRADORES_FILE, compradores);
+        }
+      } catch (remoteErr) {
+        console.warn('Consulta remota fallback:', remoteErr.message);
+      }
+    }
 
     if (comprador) {
       return res.json({
@@ -465,7 +521,7 @@ app.post('/api/suporte/verificar', (req, res) => {
         comprador: {
           name: comprador.name,
           email: comprador.email,
-          product: comprador.product,
+          product: comprador.product || 'Plataforma + Grupo VIP',
           paidAt: comprador.paidAt
         },
         linkEntrega: "https://plataforma-das-fabricas.lovable.app/"
