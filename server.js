@@ -686,20 +686,72 @@ REGRAS:
 // Endpoints do Painel Exclusivo de Suporte (Admin Suporte)
 app.get('/api/suporte/atendimentos', (req, res) => {
   try {
-    const atendimentos = readJSON(SUPORTE_ATENDIMENTOS_FILE, []);
+    const atendimentosLog = readJSON(SUPORTE_ATENDIMENTOS_FILE, []);
     const compradores = readJSON(COMPRADORES_FILE, []);
     
+    // Map para lookup rápido dos logs de atendimento por e-mail
+    const logMap = new Map();
+    atendimentosLog.forEach(item => {
+      if (item.email) logMap.set(item.email.toLowerCase().trim(), item);
+    });
+
     let totalDuvidas = 0;
-    atendimentos.forEach(a => {
+    atendimentosLog.forEach(a => {
       if (Array.isArray(a.questions)) totalDuvidas += a.questions.length;
+    });
+
+    const listaFinal = [];
+
+    // 1. Inclui todos os compradores da base com status de acesso liberado
+    compradores.forEach((c, idx) => {
+      const emailKey = (c.email || '').toLowerCase().trim();
+      const log = logMap.get(emailKey);
+      
+      const questions = (log && Array.isArray(log.questions)) ? log.questions : [];
+      const accessCount = (log && log.accessCount) ? log.accessCount : 1;
+      const lastAccessAt = (log && log.lastAccessAt) ? log.lastAccessAt : (c.updatedAt || c.paidAt || c.createdAt);
+      
+      let status = 'Acesso Liberado';
+      if (questions.length > 0) {
+        status = `💬 Dúvida: "${questions[questions.length - 1].question.substring(0, 32)}..."`;
+      }
+
+      listaFinal.push({
+        id: (log && log.id) || c.id || `comp_${idx}`,
+        name: c.name || 'Cliente',
+        email: c.email || '',
+        phone: c.phone || '',
+        product: c.product || 'Plataforma + Grupo VIP',
+        status: status,
+        encontrado: true,
+        createdAt: c.createdAt || c.paidAt || new Date().toISOString(),
+        lastAccessAt: lastAccessAt,
+        accessCount: accessCount,
+        questions: questions
+      });
+
+      if (emailKey) logMap.delete(emailKey);
+    });
+
+    // 2. Adiciona registros de consultas que não estavam na lista de compradores (ex: e-mails não localizados)
+    logMap.forEach(log => {
+      listaFinal.unshift(log);
+    });
+
+    // Ordena: quem tem dúvidas primeiro, depois por data mais recente
+    listaFinal.sort((a, b) => {
+      const qA = (a.questions && a.questions.length > 0) ? 1 : 0;
+      const qB = (b.questions && b.questions.length > 0) ? 1 : 0;
+      if (qB !== qA) return qB - qA;
+      return new Date(b.lastAccessAt || b.createdAt).getTime() - new Date(a.lastAccessAt || a.createdAt).getTime();
     });
 
     res.json({
       success: true,
       totalCompradores: compradores.length,
-      totalAtendimentos: atendimentos.length,
+      totalAtendimentos: listaFinal.length,
       totalDuvidas,
-      atendimentos
+      atendimentos: listaFinal
     });
   } catch (err) {
     console.error('Erro ao listar atendimentos de suporte:', err);

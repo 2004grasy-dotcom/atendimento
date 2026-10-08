@@ -99,12 +99,15 @@ async function carregarDadosSuporte(silencioso = false) {
   }
 }
 
+let limiteExibicao = 50;
+let listaFiltradaAtual = [];
+
 // Filtro e Renderização
 function filtrarAtendimentos() {
   const busca = (document.getElementById('search-input').value || '').toLowerCase().trim();
   const filtroStatus = document.getElementById('status-filter').value;
 
-  const filtrados = todosAtendimentos.filter(item => {
+  listaFiltradaAtual = todosAtendimentos.filter(item => {
     // Filtro de busca textual
     const nome = (item.name || '').toLowerCase();
     const email = (item.email || '').toLowerCase();
@@ -125,13 +128,13 @@ function filtrarAtendimentos() {
     return true;
   });
 
-  renderTabela(filtrados);
+  renderTabela(listaFiltradaAtual);
 }
 
 function renderTabela(lista) {
   const tbody = document.getElementById('atendimentos-tbody');
   const countBadge = document.getElementById('atendimentos-count');
-  countBadge.innerText = `${lista.length} registro${lista.length === 1 ? '' : 's'}`;
+  countBadge.innerText = `${lista.length} cliente${lista.length === 1 ? '' : 's'}`;
 
   if (lista.length === 0) {
     tbody.innerHTML = `
@@ -139,14 +142,17 @@ function renderTabela(lista) {
         <td colspan="6" class="text-center py-12 text-gray-400">
           <div class="text-3xl mb-2">🔍</div>
           <div class="font-bold text-gray-700 text-sm">Nenhum atendimento localizado</div>
-          <div class="text-xs text-gray-400 mt-0.5">Assim que os clientes digitarem o e-mail no suporte, eles aparecerão aqui automaticamente!</div>
+          <div class="text-xs text-gray-400 mt-0.5">Nenhum registro corresponde aos filtros selecionados.</div>
         </td>
       </tr>
     `;
     return;
   }
 
-  tbody.innerHTML = lista.map(item => {
+  const itensExibidos = lista.slice(0, limiteExibicao);
+  const temMais = lista.length > limiteExibicao;
+
+  let html = itensExibidos.map(item => {
     const dataFormatada = formatarData(item.lastAccessAt || item.createdAt);
     const qtdDuvidas = (item.questions && item.questions.length) || 0;
     const cleanPhone = (item.phone || '').replace(/\D/g, '');
@@ -207,7 +213,7 @@ function renderTabela(lista) {
         <td class="py-3.5 px-4 text-right">
           <div class="flex items-center justify-end gap-1.5">
             ${qtdDuvidas > 0 ? `
-              <button onclick="abrirModalDuvidas('${item.id}')" class="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold px-2.5 py-1.5 rounded-lg border border-emerald-200 transition-all" title="Ver conversa completa">
+              <button onclick="abrirModalDuvidas('${item.id}')" class="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold px-2.5 py-1.5 rounded-lg border border-emerald-200 transition-all cursor-pointer" title="Ver conversa completa">
                 Ver Dúvidas
               </button>
             ` : ''}
@@ -216,7 +222,7 @@ function renderTabela(lista) {
                 Chamar
               </a>
             ` : ''}
-            <button onclick="removerAtendimento('${item.id}')" class="text-gray-300 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 transition-colors" title="Excluir do painel">
+            <button onclick="removerAtendimento('${item.id}')" class="text-gray-300 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 transition-colors cursor-pointer" title="Excluir do painel">
               🗑️
             </button>
           </div>
@@ -224,6 +230,33 @@ function renderTabela(lista) {
       </tr>
     `;
   }).join('');
+
+  if (temMais) {
+    html += `
+      <tr class="bg-gray-50/70 border-t border-gray-200">
+        <td colspan="6" class="py-4 px-4 text-center">
+          <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <span class="text-xs text-gray-500 font-medium">Mostrando <strong>${itensExibidos.length}</strong> de <strong>${lista.length}</strong> clientes</span>
+            <div class="flex items-center gap-2">
+              <button onclick="carregarMais(50)" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold px-3 py-1.5 rounded-lg text-xs transition-all cursor-pointer">
+                + Carregar mais 50
+              </button>
+              <button onclick="carregarMais(99999)" class="bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 font-semibold px-3 py-1.5 rounded-lg text-xs transition-all cursor-pointer">
+                Ver todos (${lista.length})
+              </button>
+            </div>
+          </div>
+        </td>
+      </tr>
+    `;
+  }
+
+  tbody.innerHTML = html;
+}
+
+function carregarMais(qtd) {
+  limiteExibicao += qtd;
+  renderTabela(listaFiltradaAtual);
 }
 
 // Modal de Dúvidas
