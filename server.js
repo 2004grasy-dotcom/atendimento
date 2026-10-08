@@ -26,6 +26,7 @@ const DATA_DIR = path.join(__dirname, 'data');
 const FLOW_FILE = path.join(DATA_DIR, 'flow.json');
 const LEADS_FILE = path.join(DATA_DIR, 'leads.json');
 const COMPRADORES_FILE = path.join(DATA_DIR, 'compradores.json');
+const SUPORTE_ATENDIMENTOS_FILE = path.join(DATA_DIR, 'suporte_atendimentos.json');
 
 // Helpers for reading/writing JSON files
 function readJSON(file, fallback = {}) {
@@ -517,6 +518,41 @@ app.post('/api/suporte/verificar', async (req, res) => {
       }
     }
 
+    // Registra o atendimento no painel exclusivo de suporte
+    try {
+      const atendimentos = readJSON(SUPORTE_ATENDIMENTOS_FILE, []);
+      let item = atendimentos.find(a => a.email && a.email.toLowerCase().trim() === cleanEmail);
+      if (!item) {
+        item = {
+          id: 'sup_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 4),
+          email: cleanEmail,
+          name: comprador ? (comprador.name || 'Cliente') : 'Não Localizado',
+          phone: comprador ? (comprador.phone || '') : '',
+          product: comprador ? (comprador.product || 'Plataforma + Grupo VIP') : 'Desconhecido',
+          status: comprador ? 'Acesso Liberado' : 'E-mail Não Localizado',
+          encontrado: !!comprador,
+          createdAt: new Date().toISOString(),
+          lastAccessAt: new Date().toISOString(),
+          accessCount: 1,
+          questions: []
+        };
+        atendimentos.unshift(item);
+      } else {
+        item.lastAccessAt = new Date().toISOString();
+        item.accessCount = (item.accessCount || 1) + 1;
+        if (comprador) {
+          item.name = comprador.name || item.name;
+          item.phone = comprador.phone || item.phone;
+          item.product = comprador.product || item.product;
+          item.encontrado = true;
+          if (item.status === 'E-mail Não Localizado') item.status = 'Acesso Liberado';
+        }
+      }
+      writeJSON(SUPORTE_ATENDIMENTOS_FILE, atendimentos);
+    } catch (logErr) {
+      console.warn('Erro ao registrar log de atendimento:', logErr.message);
+    }
+
     if (comprador) {
       return res.json({
         success: true,
@@ -604,10 +640,82 @@ REGRAS:
       messages = ['Estou à disposição para te ajudar no que precisar! Caso queira acessar agora a plataforma e o Grupo VIP, basta clicar no link oficial: https://plataforma-das-fabricas.lovable.app/ ✨'];
     }
 
+    // Registra a dúvida no histórico do cliente de suporte
+    try {
+      const cleanEmail = (email || '').trim().toLowerCase();
+      const atendimentos = readJSON(SUPORTE_ATENDIMENTOS_FILE, []);
+      let item = atendimentos.find(a => a.email && a.email.toLowerCase().trim() === cleanEmail);
+      if (!item && cleanEmail) {
+        item = {
+          id: 'sup_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 4),
+          email: cleanEmail,
+          name: name || 'Cliente',
+          phone: '',
+          product: 'Plataforma + Grupo VIP',
+          status: 'Tirou Dúvida',
+          encontrado: true,
+          createdAt: new Date().toISOString(),
+          lastAccessAt: new Date().toISOString(),
+          accessCount: 1,
+          questions: []
+        };
+        atendimentos.unshift(item);
+      }
+      if (item) {
+        if (!Array.isArray(item.questions)) item.questions = [];
+        item.questions.push({
+          question: question.trim(),
+          askedAt: new Date().toISOString(),
+          answer: messages.join('\n')
+        });
+        item.status = `💬 Dúvida: "${question.trim().substring(0, 32)}..."`;
+        item.lastAccessAt = new Date().toISOString();
+        writeJSON(SUPORTE_ATENDIMENTOS_FILE, atendimentos);
+      }
+    } catch (logErr) {
+      console.warn('Erro ao salvar dúvida no suporte:', logErr.message);
+    }
+
     res.json({ success: true, messages });
   } catch (err) {
     console.error('Erro na rota de IA de suporte:', err);
     res.status(500).json({ error: 'Erro ao processar suporte: ' + err.message });
+  }
+});
+
+// Endpoints do Painel Exclusivo de Suporte (Admin Suporte)
+app.get('/api/suporte/atendimentos', (req, res) => {
+  try {
+    const atendimentos = readJSON(SUPORTE_ATENDIMENTOS_FILE, []);
+    const compradores = readJSON(COMPRADORES_FILE, []);
+    
+    let totalDuvidas = 0;
+    atendimentos.forEach(a => {
+      if (Array.isArray(a.questions)) totalDuvidas += a.questions.length;
+    });
+
+    res.json({
+      success: true,
+      totalCompradores: compradores.length,
+      totalAtendimentos: atendimentos.length,
+      totalDuvidas,
+      atendimentos
+    });
+  } catch (err) {
+    console.error('Erro ao listar atendimentos de suporte:', err);
+    res.status(500).json({ error: 'Erro ao carregar atendimentos' });
+  }
+});
+
+app.delete('/api/suporte/atendimentos/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    let atendimentos = readJSON(SUPORTE_ATENDIMENTOS_FILE, []);
+    atendimentos = atendimentos.filter(a => a.id !== id && a.email !== id);
+    writeJSON(SUPORTE_ATENDIMENTOS_FILE, atendimentos);
+    res.json({ success: true, message: 'Registro de atendimento removido' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao remover atendimento: ' + err.message });
   }
 });
 
@@ -770,7 +878,14 @@ app.delete('/api/compradores/:email', (req, res) => {
 });
 
 app.get('/admin', (req, res) => {
+  if (process.env.DEFAULT_PAGE === 'suporte' || (req.hostname && req.hostname.toLowerCase().includes('suporte'))) {
+    return res.sendFile('admin-suporte.html', { root: PUBLIC_DIR });
+  }
   res.sendFile('admin.html', { root: PUBLIC_DIR });
+});
+
+app.get(['/admin-suporte', '/painel-suporte'], (req, res) => {
+  res.sendFile('admin-suporte.html', { root: PUBLIC_DIR });
 });
 
 app.get(['/suporte', '/acesso'], (req, res) => {
