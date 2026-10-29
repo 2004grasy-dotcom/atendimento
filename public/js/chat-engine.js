@@ -26,8 +26,15 @@ class TypebotChat {
 
   async init() {
     try {
-      const res = await fetch('/api/flow');
+      const urlParams = new URLSearchParams(window.location.search);
+      const isPromo = window.IS_PROMO_29_90 || 
+                      window.location.pathname.toLowerCase().includes('promo') || 
+                      urlParams.get('promo') === '29-90' || 
+                      urlParams.get('tipo') === 'promocao';
+      const endpoint = window.FLOW_ENDPOINT || (isPromo ? '/api/flow-promocao' : '/api/flow');
+      const res = await fetch(endpoint);
       this.flow = await res.json();
+      this.isPromo = isPromo || (this.flow.settings && this.flow.settings.flowType === 'promocao');
       this.applyTheme(this.flow.settings);
       this.setupEventListeners();
       this.startConversation();
@@ -656,7 +663,8 @@ class TypebotChat {
         body: JSON.stringify({
           question: question,
           sessionId: this.sessionId,
-          answers: this.answers
+          answers: this.answers,
+          flowType: (this.flow && this.flow.settings && this.flow.settings.flowType) || (this.isPromo ? 'promocao' : 'normal')
         })
       });
       const data = await res.json();
@@ -689,15 +697,18 @@ class TypebotChat {
     const actionContainer = document.createElement('div');
     actionContainer.className = 'flex flex-col gap-2.5 pl-10 pr-2 my-3 animate-pop-in max-w-2xl w-full mx-auto';
 
+    const checkoutUrl = (this.flow && this.flow.settings && this.flow.settings.checkoutUrl) || 'https://plataforma-oficial.lovable.app/';
+    const buttonText = (this.flow && this.flow.settings && this.flow.settings.checkoutButtonText) || 'Acessar Planos e Fazer Cadastro';
+
     const buyBtn = document.createElement('a');
-    buyBtn.href = 'https://plataforma-oficial.lovable.app/';
+    buyBtn.href = checkoutUrl;
     buyBtn.target = '_blank';
     buyBtn.rel = 'noopener noreferrer';
     buyBtn.className = 'w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 px-6 rounded-xl shadow-lg hover:shadow-emerald-500/30 transition-all flex items-center justify-between text-base group cursor-pointer transform hover:-translate-y-0.5';
     buyBtn.innerHTML = `
       <span class="flex items-center gap-2">
         <span class="text-xl">💳</span>
-        <span>Acessar Planos e Fazer Cadastro</span>
+        <span>${buttonText}</span>
       </span>
       <svg class="w-5 h-5 text-white/90 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
     `;
@@ -773,7 +784,8 @@ class TypebotChat {
           etapaAtual: this.answers.etapa_atual || 'Iniciou Atendimento',
           clicouCadastro: !!this.answers.clicou_cadastro,
           clicouWhatsapp: !!this.answers.clicou_whatsapp,
-          chegouAoFim: !!this.answers.chegou_ao_fim
+          chegouAoFim: !!this.answers.chegou_ao_fim,
+          flowType: (this.flow && this.flow.settings && this.flow.settings.flowType) || (this.isPromo ? 'promocao' : 'normal')
         })
       });
     } catch (err) {

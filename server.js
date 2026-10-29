@@ -24,6 +24,7 @@ app.use(express.static(PUBLIC_DIR, { index: false }));
 
 const DATA_DIR = path.join(__dirname, 'data');
 const FLOW_FILE = path.join(DATA_DIR, 'flow.json');
+const FLOW_PROMO_FILE = path.join(DATA_DIR, 'flow_promocao_29_90.json');
 const LEADS_FILE = path.join(DATA_DIR, 'leads.json');
 const COMPRADORES_FILE = path.join(DATA_DIR, 'compradores.json');
 const SUPORTE_ATENDIMENTOS_FILE = path.join(DATA_DIR, 'suporte_atendimentos.json');
@@ -55,7 +56,14 @@ function writeJSON(file, data) {
 
 // Rotas de API para o Fluxo (Flow Builder)
 app.get('/api/flow', (req, res) => {
-  const flow = readJSON(FLOW_FILE, { settings: {}, steps: [] });
+  const isPromo = req.query.tipo === 'promocao' || req.query.promo === '29-90' || req.query.promo === 'true';
+  const fileToRead = isPromo ? FLOW_PROMO_FILE : FLOW_FILE;
+  const flow = readJSON(fileToRead, { settings: {}, steps: [] });
+  res.json(flow);
+});
+
+app.get(['/api/flow-promocao', '/api/flow-promo'], (req, res) => {
+  const flow = readJSON(FLOW_PROMO_FILE, { settings: {}, steps: [] });
   res.json(flow);
 });
 
@@ -65,11 +73,28 @@ app.post('/api/flow', (req, res) => {
     return res.status(400).json({ error: 'Formato de fluxo inválido' });
   }
 
-  const success = writeJSON(FLOW_FILE, newFlow);
+  const isPromo = req.query.tipo === 'promocao' || req.query.promo === '29-90' || (newFlow.settings && newFlow.settings.flowType === 'promocao');
+  const targetFile = isPromo ? FLOW_PROMO_FILE : FLOW_FILE;
+
+  const success = writeJSON(targetFile, newFlow);
   if (success) {
     res.json({ message: 'Fluxo salvo com sucesso!', flow: newFlow });
   } else {
     res.status(500).json({ error: 'Erro ao persistir o fluxo no disco.' });
+  }
+});
+
+app.post(['/api/flow-promocao', '/api/flow-promo'], (req, res) => {
+  const newFlow = req.body;
+  if (!newFlow || !newFlow.steps) {
+    return res.status(400).json({ error: 'Formato de fluxo inválido' });
+  }
+
+  const success = writeJSON(FLOW_PROMO_FILE, newFlow);
+  if (success) {
+    res.json({ message: 'Fluxo promocional salvo com sucesso!', flow: newFlow });
+  } else {
+    res.status(500).json({ error: 'Erro ao persistir o fluxo promocional no disco.' });
   }
 });
 
@@ -172,7 +197,7 @@ app.get('/api/leads', (req, res) => {
 
 app.post('/api/leads', async (req, res) => {
   try {
-    const { answers, sessionId, etapaAtual, clicouCadastro, clicouWhatsapp, chegouAoFim } = req.body;
+    const { answers, sessionId, etapaAtual, clicouCadastro, clicouWhatsapp, chegouAoFim, flowType } = req.body;
     if (!answers && !etapaAtual) {
       return res.status(400).json({ error: 'Dados vazios' });
     }
@@ -185,6 +210,9 @@ app.post('/api/leads', async (req, res) => {
     if (lead) {
       lead.updatedAt = now;
       lead.answers = { ...(lead.answers || {}), ...(answers || {}) };
+
+      if (flowType) lead.flowType = flowType;
+      else if (lead.answers.flowType) lead.flowType = lead.answers.flowType;
 
       if (etapaAtual) lead.etapaAtual = etapaAtual;
       else if (lead.answers.etapa_atual) lead.etapaAtual = lead.answers.etapa_atual;
@@ -203,6 +231,7 @@ app.post('/api/leads', async (req, res) => {
         sessionId: sess,
         createdAt: now,
         updatedAt: now,
+        flowType: flowType || (answers && answers.flowType) || 'normal',
         name: isAnon ? ('Visitante #' + sess.slice(-5)) : (answers.nome || answers.name),
         whatsapp: (answers && (answers.whatsapp || answers.telefone || answers.phone)) || '',
         email: (answers && answers.email) || '',
@@ -242,18 +271,54 @@ app.post('/api/leads', async (req, res) => {
 // Endpoint de IA para Dúvidas e Quebra de Objeções (Leticia AI)
 app.post('/api/ai/ask', async (req, res) => {
   try {
-    const { question, sessionId, answers } = req.body;
+    const { question, sessionId, answers, flowType } = req.body;
     if (!question || !question.trim()) {
       return res.status(400).json({ error: 'Pergunta vazia' });
     }
 
-    const flow = readJSON(FLOW_FILE, {});
-    const apiKey = process.env.GEMINI_API_KEY || (flow.settings && flow.settings.geminiApiKey) || '';
+    const isPromo = flowType === 'promocao' || (answers && answers.flowType === 'promocao');
+    const flowNormal = readJSON(FLOW_FILE, {});
+    const flowPromo = readJSON(FLOW_PROMO_FILE, {});
+    const flow = isPromo ? flowPromo : flowNormal;
+
+    const apiKey = process.env.GEMINI_API_KEY || (flow.settings && flow.settings.geminiApiKey) || (flowNormal.settings && flowNormal.settings.geminiApiKey) || '';
 
     const userName = (answers && (answers.nome || answers.name)) || '';
     const userGoal = (answers && answers.objetivo) || '';
 
-    const systemInstruction = `Você é a Letícia, consultora e atendente virtual oficial no WhatsApp da Plataforma de Fabricantes e Fornecedores de Roupas a Preço de Custo.
+    let systemInstruction = '';
+
+    if (isPromo) {
+      systemInstruction = `Você é a Letícia, consultora e atendente virtual oficial no WhatsApp da Plataforma de Fabricantes e Fornecedores de Roupas a Preço de Custo.
+O cliente ${userName ? `se chama ${userName} e ` : ''}está na página exclusiva da CONDIÇÃO PROMOCIONAL especial de R$ 29,90. ${userGoal ? `O objetivo dele é: ${userGoal}.` : ''}
+
+CONHECIMENTO COMPLETO:
+- O QUE É A PLATAFORMA: Um sistema exclusivo com contatos, catálogos e acesso direto a distribuidores e fabricantes de confecção própria (Brás, Bom Retiro, Goiânia, Fortaleza, etc.) vendendo roupas femininas, vestidos, conjuntos, etc., a preço de custo real de fábrica.
+- FRETE: A grande maioria dos fabricantes tem frete grátis ou frete facilitado com transportadoras parceiras e Correios super em conta para o Brasil inteiro.
+- PEDIDO MÍNIMO:
+  * Para revenda: A maioria é a partir de apenas R$ 100,00 ou 6 peças no atacado (muitos nem têm pedido mínimo!).
+  * Para consumo próprio: Vários distribuidores vendem no varejo a preço de atacado sem exigência de quantidade mínima.
+- OFERTA PROMOCIONAL ATIVA (MANDATÓRIO):
+  * Nesta página especial, o acesso completo à Plataforma (Plano Pro com todos os fabricantes VIP, contatos de fornecedores e suporte) está na SUPER PROMOÇÃO por apenas R$ 29,90 (pagamento único, acesso vitalício)!
+  * REGRA MANDATÓRIA DE VALORES: Se o cliente perguntar o preço, valor ou quanto custa, NUNCA mande ele olhar no link! É OBRIGATÓRIO informar com todas as letras na resposta o valor promocional exato: por apenas R$ 29,90 no pagamento único!
+- PAGAMENTO: Cartão de crédito ou Pix com liberação imediata.
+- ACESSO: Login e senha chegam na hora por e-mail e o suporte chama no WhatsApp para dar as boas-vindas.
+- LINK OFICIAL PROMOCIONAL: https://pay.cakto.com.br/32thr3a
+- WHATSAPP: (67) 99614-6854
+
+REGRAS OBRIGATÓRIAS DE COMUNICAÇÃO:
+1. Responda SEMPRE em formato JSON com dois campos:
+   - "messages": array de strings com 1 ou 2 mensagens curtas separadas (como duas mensagens consecutivas de WhatsApp, sem textões). NUNCA envie links crus, sites ou URLs nas mensagens de texto, pois o sistema insere o botão oficial na tela apenas quando solicitado.
+   - "wants_to_buy": boolean.
+     * Retorne true SE E SOMENTE SE o cliente disser expressamente com todas as letras que quer comprar agora, que quer o link para comprar, ou frases como: 'quero comprar', 'vou querer', 'me manda o link', 'como faco para pagar', 'pode me mandar o link'.
+     * Retorne SEMPRE false se o cliente estiver apenas tirando dúvidas (inclusive sobre preço, quanto custa, valor promocional, frete, fabricantes, pedidos mínimos, etc.), conversando, elogiando ou se disser 'não'. PERGUNTAR PREÇO OU FAZER PERGUNTAS NÃO É COMPRAR, portanto wants_to_buy DEVE SER false!
+2. Quando o cliente tirar uma dúvida ou perguntar o preço (wants_to_buy = false):
+   - Na primeira mensagem: responda com simpatia como a Letícia. Se o cliente perguntou o preço, informe obrigatoriamente o valor promocional: apenas R$ 29,90 pagamento único com acesso vitalício.
+   - Na segunda mensagem: pergunte com carinho se ele tem mais alguma dúvida: "Deu para entender certinho${userName ? `, ${userName}` : ''}? Você tem mais alguma dúvida sobre a plataforma, ou prefere que eu te envie o link para garantir sua vaga por R$ 29,90 agora?"
+3. Quando o cliente disser expressamente que quer comprar ou pedir o link de compra (wants_to_buy = true):
+   - Comemore com simpatia e diga que você está liberando o botão oficial de cadastro promocional por R$ 29,90 na tela agora mesmo!`;
+    } else {
+      systemInstruction = `Você é a Letícia, consultora e atendente virtual oficial no WhatsApp da Plataforma de Fabricantes e Fornecedores de Roupas a Preço de Custo.
 O cliente ${userName ? `se chama ${userName} e ` : ''}está conversando com você no final do atendimento. ${userGoal ? `O objetivo dele é: ${userGoal}.` : ''}
 
 CONHECIMENTO COMPLETO:
@@ -282,6 +347,7 @@ REGRAS OBRIGATÓRIAS DE COMUNICAÇÃO:
    - Na segunda mensagem: pergunte com carinho se ele tem mais alguma dúvida: "Deu para entender certinho${userName ? `, ${userName}` : ''}? Você tem mais alguma dúvida sobre a plataforma, ou prefere que eu te envie o link para garantir seu plano agora?"
 3. Quando o cliente disser expressamente que quer comprar ou pedir o link de compra (wants_to_buy = true):
    - Comemore com simpatia e diga que você está liberando o botão oficial de cadastro e escolha do plano na tela agora mesmo!`;
+    }
 
     const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=' + apiKey;
     const aiRes = await fetch(url, {
@@ -944,10 +1010,32 @@ app.get(['/suporte', '/acesso'], (req, res) => {
   res.sendFile('suporte.html', { root: PUBLIC_DIR });
 });
 
+// Rotas do Funil Promocional (R$ 29,90)
+app.get([
+  '/promoção-de-29-90',
+  '/promocao-de-29-90',
+  encodeURI('/promoção-de-29-90'),
+  '/promocao-29-90',
+  '/promo-29-90',
+  '/promocao',
+  '/promo'
+], (req, res) => {
+  res.sendFile('promocao-de-29-90.html', { root: PUBLIC_DIR });
+});
+
 // Middleware catch-all inteligente:
+// Se o caminho tiver "promo", abre o funil promocional
 // Se o domínio for suporte-leticia (ou DEFAULT_PAGE=suporte), a página inicial é o suporte
 // Se o domínio for atendimento-leticia, a página inicial é o bot de vendas
 app.use((req, res) => {
+  try {
+    const rawPath = req.path || '';
+    const decodedPath = decodeURIComponent(rawPath).toLowerCase();
+    if (decodedPath.includes('promo')) {
+      return res.sendFile('promocao-de-29-90.html', { root: PUBLIC_DIR });
+    }
+  } catch (e) {}
+
   if (process.env.DEFAULT_PAGE === 'suporte' || (req.hostname && req.hostname.toLowerCase().includes('suporte'))) {
     return res.sendFile('suporte.html', { root: PUBLIC_DIR });
   }

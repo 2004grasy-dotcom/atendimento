@@ -558,7 +558,10 @@ function renderLeadsTable() {
         ${dUpdate ? `<div class="text-[10px] text-gray-400">Última ação: ${dUpdate}</div>` : ''}
       </td>
       <td class="px-5 py-3.5">
-        <div class="font-bold text-gray-900 text-xs sm:text-sm">${escapeHtml(lead.name || 'Visitante')}</div>
+        <div class="font-bold text-gray-900 text-xs sm:text-sm flex items-center gap-1.5">
+          <span>${escapeHtml(lead.name || 'Visitante')}</span>
+          ${(lead.flowType === 'promocao' || (lead.answers && lead.answers.flowType === 'promocao')) ? '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">Promo 29,90</span>' : ''}
+        </div>
         <div class="text-[11px] text-gray-400 font-mono">${escapeHtml(lead.sessionId || '')}</div>
         ${lead.whatsapp ? `
           <a href="${waLink}" target="_blank" class="inline-flex items-center gap-1 text-[11px] text-emerald-700 font-semibold hover:underline mt-0.5">
