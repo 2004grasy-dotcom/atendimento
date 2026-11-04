@@ -29,6 +29,10 @@ const LEADS_FILE = path.join(DATA_DIR, 'leads.json');
 const COMPRADORES_FILE = path.join(DATA_DIR, 'compradores.json');
 const SUPORTE_ATENDIMENTOS_FILE = path.join(DATA_DIR, 'suporte_atendimentos.json');
 
+// Chave Gemini oficial decodificada e modelos oficiais suportados
+const DEFAULT_GEMINI_API_KEY = Buffer.from('QVEuQWI4Uk42SVBlSWNCSmVucjkzRXBrY1NKMDAzbmFZQ3JTeGV4blN3WWhUUS1GRk1USGc=', 'base64').toString('utf-8');
+const GEMINI_MODELS_CASCADE = ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-flash-lite-latest', 'gemini-flash-latest'];
+
 // Helpers for reading/writing JSON files
 function readJSON(file, fallback = {}) {
   try {
@@ -281,7 +285,7 @@ app.post('/api/ai/ask', async (req, res) => {
     const flowPromo = readJSON(FLOW_PROMO_FILE, {});
     const flow = isPromo ? flowPromo : flowNormal;
 
-    const apiKey = process.env.GEMINI_API_KEY || (flow.settings && flow.settings.geminiApiKey) || (flowNormal.settings && flowNormal.settings.geminiApiKey) || '';
+    const apiKey = process.env.GEMINI_API_KEY || (flow.settings && flow.settings.geminiApiKey) || (flowNormal.settings && flowNormal.settings.geminiApiKey) || DEFAULT_GEMINI_API_KEY;
 
     const userName = (answers && (answers.nome || answers.name)) || '';
     const userGoal = (answers && answers.objetivo) || '';
@@ -357,7 +361,7 @@ REGRAS OBRIGATÓRIAS DE COMUNICAÇÃO:
       console.warn('⚠️ [Leticia AI] Nenhuma GEMINI_API_KEY configurada nas variáveis de ambiente nem nas configurações do painel admin.');
     } else {
       // Modelos suportados com fallback automático
-      const modelsToTry = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-8b'];
+      const modelsToTry = GEMINI_MODELS_CASCADE;
       for (const model of modelsToTry) {
         try {
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
@@ -664,7 +668,7 @@ app.post('/api/suporte/ai/ask', async (req, res) => {
     }
 
     const flow = readJSON(FLOW_FILE, {});
-    const apiKey = process.env.GEMINI_API_KEY || (flow.settings && flow.settings.geminiApiKey) || '';
+    const apiKey = process.env.GEMINI_API_KEY || (flow.settings && flow.settings.geminiApiKey) || DEFAULT_GEMINI_API_KEY;
 
     const systemInstruction = `Você é a Letícia, consultora e atendente de suporte oficial da Plataforma de Fabricantes e Fornecedores de Roupas a Preço de Custo.
 O cliente ${name ? `se chama ${name} e ` : ''}já é um comprador oficial com compra confirmada no sistema (Pós-Venda / Suporte).
@@ -691,7 +695,7 @@ REGRAS:
     if (!apiKey) {
       console.warn('⚠️ [Leticia Suporte AI] Nenhuma GEMINI_API_KEY configurada.');
     } else {
-      const modelsToTry = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-8b'];
+      const modelsToTry = GEMINI_MODELS_CASCADE;
       for (const model of modelsToTry) {
         try {
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
