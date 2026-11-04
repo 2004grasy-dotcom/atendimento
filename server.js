@@ -349,31 +349,42 @@ REGRAS OBRIGATÓRIAS DE COMUNICAÇÃO:
    - Comemore com simpatia e diga que você está liberando o botão oficial de cadastro e escolha do plano na tela agora mesmo!`;
     }
 
-    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=' + apiKey;
-    const aiRes = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: question.trim() }]
-          }
-        ],
-        systemInstruction: {
-          parts: [{ text: systemInstruction }]
-        },
-        generationConfig: {
-          responseMimeType: 'application/json'
-        }
-      })
-    });
-
-    const aiData = await aiRes.json();
+    let aiData = null;
     let messages = [];
     let wantsToBuy = false;
 
-    if (aiData.candidates && aiData.candidates[0] && aiData.candidates[0].content && aiData.candidates[0].content.parts) {
+    if (!apiKey) {
+      console.warn('⚠️ [Leticia AI] Nenhuma GEMINI_API_KEY configurada nas variáveis de ambiente nem nas configurações do painel admin.');
+    } else {
+      // Modelos suportados com fallback automático
+      const modelsToTry = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-8b'];
+      for (const model of modelsToTry) {
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+          const aiRes = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts: [{ text: question.trim() }] }],
+              systemInstruction: { parts: [{ text: systemInstruction }] },
+              generationConfig: { responseMimeType: 'application/json' }
+            })
+          });
+
+          if (aiRes.ok) {
+            aiData = await aiRes.json();
+            break;
+          } else {
+            const errBody = await aiRes.text();
+            console.warn(`[Leticia AI] Tentativa com modelo ${model} retornou status ${aiRes.status}:`, errBody.substring(0, 150));
+          }
+        } catch (e) {
+          console.warn(`[Leticia AI] Erro ao chamar modelo ${model}:`, e.message);
+        }
+      }
+    }
+
+    if (aiData && aiData.candidates && aiData.candidates[0] && aiData.candidates[0].content && aiData.candidates[0].content.parts) {
       try {
         const rawJson = aiData.candidates[0].content.parts[0].text;
         const parsed = JSON.parse(rawJson);
@@ -674,21 +685,40 @@ REGRAS:
 - Mensagens curtas, humanas, simpáticas e acolhedoras estilo WhatsApp (sem textões).
 - Chame a pessoa pelo nome ${name ? `(${name})` : ''} com carinho quando fizer sentido.`;
 
-    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=' + apiKey;
-    const aiRes = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: question.trim() }] }],
-        systemInstruction: { parts: [{ text: systemInstruction }] },
-        generationConfig: { responseMimeType: 'application/json' }
-      })
-    });
-
-    const aiData = await aiRes.json();
+    let aiData = null;
     let messages = [];
 
-    if (aiData.candidates && aiData.candidates[0] && aiData.candidates[0].content && aiData.candidates[0].content.parts) {
+    if (!apiKey) {
+      console.warn('⚠️ [Leticia Suporte AI] Nenhuma GEMINI_API_KEY configurada.');
+    } else {
+      const modelsToTry = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-8b'];
+      for (const model of modelsToTry) {
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+          const aiRes = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts: [{ text: question.trim() }] }],
+              systemInstruction: { parts: [{ text: systemInstruction }] },
+              generationConfig: { responseMimeType: 'application/json' }
+            })
+          });
+
+          if (aiRes.ok) {
+            aiData = await aiRes.json();
+            break;
+          } else {
+            const errBody = await aiRes.text();
+            console.warn(`[Leticia Suporte AI] Tentativa com modelo ${model} retornou status ${aiRes.status}:`, errBody.substring(0, 150));
+          }
+        } catch (e) {
+          console.warn(`[Leticia Suporte AI] Erro ao chamar modelo ${model}:`, e.message);
+        }
+      }
+    }
+
+    if (aiData && aiData.candidates && aiData.candidates[0] && aiData.candidates[0].content && aiData.candidates[0].content.parts) {
       try {
         const rawJson = aiData.candidates[0].content.parts[0].text;
         const parsed = JSON.parse(rawJson);
