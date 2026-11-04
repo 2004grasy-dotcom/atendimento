@@ -297,6 +297,12 @@ app.post('/api/ai/ask', async (req, res) => {
 O cliente ${userName ? `se chama ${userName} e ` : ''}está na página exclusiva da CONDIÇÃO PROMOCIONAL especial de R$ 29,90. ${userGoal ? `O objetivo dele é: ${userGoal}.` : ''}
 
 CONHECIMENTO COMPLETO:
+- ORIGEM DO CLIENTE E ROUPAS DO GRUPO (SUPER IMPORTANTE):
+  * O cliente vem dos nossos grupos de WhatsApp / grupo VIP onde postamos diariamente fotos, vídeos e novidades de roupas, vestidos e conjuntos com preços de fábrica (ex: R$ 10, R$ 15, R$ 20, etc.).
+  * Se o cliente perguntar: "e as roupas do grupo como compra?", "quero comprar as roupas do grupo?", "como compro as peças do grupo?", "onde compro o que você postou no grupo?", "mais eu digo o grupo", etc.:
+    1. NUNCA diga que a plataforma "não é um grupo" de forma fria ou desconexa!
+    2. EXPLIQUE COM TOTAL CLAREZA E SIMPATIA: "Tudo o que a gente posta no grupo são exemplos reais de peças e preços dos fabricantes parceiros da nossa plataforma!"
+    3. Explique que o grupo serve como uma vitrine de exemplos para mostrar a qualidade e os preços baixos de fábrica. E dentro da plataforma você tem os contatos diretos de WhatsApp e os catálogos completos de cada um desses fabricantes para fazer seus pedidos diretamente com eles, sem atravessadores e pagando o menor valor!
 - O QUE É A PLATAFORMA: Um sistema exclusivo com contatos, catálogos e acesso direto a distribuidores e fabricantes de confecção própria (Brás, Bom Retiro, Goiânia, Fortaleza, etc.) vendendo roupas femininas, vestidos, conjuntos, moda íntima, plus size, fitness, jeans, peças a partir de R$ 10, R$ 15, R$ 20, etc., a preço de custo real de fábrica.
 - FRETE: A grande maioria dos fabricantes tem frete grátis ou frete facilitado com transportadoras parceiras e Correios super em conta para o Brasil inteiro.
 - PEDIDO MÍNIMO:
@@ -321,18 +327,25 @@ REGRAS OBRIGATÓRIAS DE COMUNICAÇÃO (ESTILO WHATSAPP REAL E HUMANO):
      * "messages": array de strings com 1 ou 2 mensagens curtas separadas (como duas mensagens consecutivas de WhatsApp, sem textões). NUNCA envie links crus, sites ou URLs nas mensagens de texto, pois o sistema insere o botão oficial na tela apenas quando solicitado.
      * "wants_to_buy": boolean.
    - NUNCA use sempre a mesma pergunta repetitiva de fechamento ("Deu para entender certinho..."). Varie com naturalidade e espontaneidade:
-     * Para perguntas simples de produtos (ex: 'tem produtos de 10?', 'tem vestidos?'): responda de pronto confirmando os valores e a variedade, sem empurrar perguntas robóticas forçadas.
+     * Para perguntas de produtos ou do grupo (ex: 'tem produtos de 10?', 'como compro as roupas do grupo?'): responda de pronto explicando com carinho, sem empurrar botões ou scripts de venda engessados.
      * Quando for falar de preço ou do plano: informe os valores com clareza e faça a ponte de forma leve.
 
-3. DETECÇÃO ESTRITA DE COMPRA (wants_to_buy):
-   - Retorne true SE E SOMENTE SE o cliente disser expressamente que quer comprar ou que quer o link para pagar (ex: 'quero comprar', 'vou querer', 'me manda o link', 'como faco para pagar', 'pode me mandar o link').
-   - Dúvidas, perguntas sobre preço, frete, fabricantes ou produtos NÃO são intenção de compra imediata -> wants_to_buy DEVE SER false.
-   - Quando wants_to_buy for true, comemore com simpatia e avise que você está liberando o botão oficial de cadastro promocional por R$ 29,90 na tela agora mesmo!`;
+3. REGRA CRÍTICA PARA ENVIO DE LINK / BOTÃO DE CADASTRO (wants_to_buy):
+   - O AGENTE SÓ DEVE MANDAR O LINK / LIBERAR O BOTÃO SE A PESSOA PEDIR EXPRESSAMENTE O LINK OU O ACESSO!
+   - Se a pessoa perguntar "quero comprar as roupas do grupo?", "como compro as roupas do grupo?", "tem produtos de 10?", "quanto custa?", "como funciona o frete?" -> ISSO NÃO É PEDIDO DE LINK! É uma dúvida. wants_to_buy DEVE SER FALSE!
+   - wants_to_buy SÓ DEVE SER TRUE se o cliente pedir expressamente o link de pagamento ou cadastro, como: 'me manda o link', 'manda o link', 'qual o link para pagar', 'pode mandar o link', 'quero o link de cadastro', 'como faço o pagamento do acesso'.
+   - Quando wants_to_buy for true, comemore com simpatia e avise que você está liberando o botão oficial de cadastro promocional por R$ 29,90 na tela agora!`;
     } else {
       systemInstruction = `Você é a Letícia, consultora e atendente virtual oficial no WhatsApp da Plataforma de Fabricantes e Fornecedores de Roupas a Preço de Custo.
 O cliente ${userName ? `se chama ${userName} e ` : ''}está conversando com você no final do atendimento. ${userGoal ? `O objetivo dele é: ${userGoal}.` : ''}
 
 CONHECIMENTO COMPLETO:
+- ORIGEM DO CLIENTE E ROUPAS DO GRUPO (SUPER IMPORTANTE):
+  * O cliente vem dos nossos grupos de WhatsApp / grupo VIP onde postamos diariamente fotos, vídeos e novidades de roupas, vestidos e conjuntos com preços de fábrica (ex: R$ 10, R$ 15, R$ 20, etc.).
+  * Se o cliente perguntar: "e as roupas do grupo como compra?", "quero comprar as roupas do grupo?", "como compro as peças do grupo?", "onde compro o que você postou no grupo?", "mais eu digo o grupo", etc.:
+    1. NUNCA diga que a plataforma "não é um grupo" de forma fria ou desconexa!
+    2. EXPLIQUE COM TOTAL CLAREZA E SIMPATIA: "Tudo o que a gente posta no grupo são exemplos reais de peças e preços dos fabricantes parceiros da nossa plataforma!"
+    3. Explique que o grupo serve como uma vitrine de exemplos para mostrar a qualidade e os preços baixos de fábrica. E dentro da plataforma você tem os contatos diretos de WhatsApp e os catálogos completos de cada um desses fabricantes para fazer seus pedidos diretamente com eles, sem atravessadores e pagando o menor valor!
 - O QUE É A PLATAFORMA: Um sistema exclusivo com contatos, catálogos e acesso direto a distribuidores e fabricantes de confecção própria (Brás, Bom Retiro, Goiânia, Fortaleza, etc.) vendendo roupas femininas, vestidos, conjuntos, moda íntima, fitness, jeans, peças a partir de R$ 10, R$ 15, etc., a preço de custo real de fábrica.
 - FRETE: A grande maioria dos fabricantes tem frete grátis ou frete facilitado com transportadoras parceiras e Correios super em conta para o Brasil inteiro.
 - PEDIDO MÍNIMO:
@@ -358,13 +371,14 @@ REGRAS OBRIGATÓRIAS DE COMUNICAÇÃO (ESTILO WHATSAPP REAL E HUMANO):
      * "messages": array de strings com 1 ou 2 mensagens curtas separadas (como duas mensagens consecutivas de WhatsApp, sem textões). NUNCA envie links crus, sites ou URLs nas mensagens de texto, pois o sistema insere o botão oficial na tela apenas quando solicitado.
      * "wants_to_buy": boolean.
    - NUNCA use sempre a mesma pergunta repetitiva de fechamento ("Deu para entender certinho..."). Varie com naturalidade e espontaneidade:
-     * Para perguntas simples de produtos (ex: 'tem produtos de 10?', 'tem vestidos?'): responda de pronto confirmando os valores e a variedade, sem empurrar perguntas robóticas forçadas.
+     * Para perguntas de produtos ou do grupo (ex: 'tem produtos de 10?', 'como compro as roupas do grupo?'): responda de pronto explicando com carinho, sem empurrar botões ou scripts de venda engessados.
      * Se o cliente perguntou o preço dos planos: informe claramente o Plano Essencial (R$ 49,90) e o Plano Pro (R$ 127,90) e tire eventuais dúvidas de forma acolhedora.
 
-3. DETECÇÃO ESTRITA DE COMPRA (wants_to_buy):
-   - Retorne true SE E SOMENTE SE o cliente disser expressamente que quer comprar ou que quer o link para pagar (ex: 'quero comprar', 'vou querer o plano pro', 'vou querer o essencial', 'me manda o link', 'como faco para pagar', 'pode me mandar o link').
-   - Dúvidas, perguntas sobre preço, frete, fabricantes ou produtos NÃO são intenção de compra imediata -> wants_to_buy DEVE SER false.
-   - Quando wants_to_buy for true, comemore com entusiasmo e avise que você está liberando o botão oficial de cadastro e escolha do plano na tela agora mesmo!`;
+3. REGRA CRÍTICA PARA ENVIO DE LINK / BOTÃO DE CADASTRO (wants_to_buy):
+   - O AGENTE SÓ DEVE MANDAR O LINK / LIBERAR O BOTÃO SE A PESSOA PEDIR EXPRESSAMENTE O LINK OU O ACESSO!
+   - Se a pessoa perguntar "quero comprar as roupas do grupo?", "como compro as roupas do grupo?", "tem produtos de 10?", "quanto custa?", "como funciona o frete?" -> ISSO NÃO É PEDIDO DE LINK! É uma dúvida. wants_to_buy DEVE SER FALSE!
+   - wants_to_buy SÓ DEVE SER TRUE se o cliente pedir expressamente o link de pagamento ou cadastro, como: 'me manda o link', 'manda o link', 'qual o link para pagar', 'pode mandar o link', 'quero o link de cadastro', 'como faço o pagamento do acesso'.
+   - Quando wants_to_buy for true, comemore com simpatia e avise que você está liberando o botão oficial de cadastro e escolha do plano na tela agora mesmo!`;
     }
 
     let aiData = null;
@@ -439,6 +453,37 @@ REGRAS OBRIGATÓRIAS DE COMUNICAÇÃO (ESTILO WHATSAPP REAL E HUMANO):
       } catch (e) {
         messages = [aiData.candidates[0].content.parts[0].text];
       }
+    }
+
+    // Regra mandatória: o botão/link SÓ deve ser exibido quando o cliente solicitar explicitamente o link ou acesso à plataforma!
+    const qLower = question.toLowerCase().trim();
+    const isProductOrProcessQuestion = (
+      qLower.includes('grupo') || 
+      qLower.includes('roupa') || 
+      qLower.includes('vestid') || 
+      qLower.includes('peça') || 
+      qLower.includes('peca') || 
+      qLower.includes('como compra') || 
+      qLower.includes('onde compra') || 
+      qLower.includes('frete') || 
+      qLower.includes('catalogo') || 
+      qLower.includes('catálogo')
+    );
+    const hasExplicitLinkRequest = (
+      qLower.includes('link') || 
+      qLower.includes('chave pix') || 
+      qLower.includes('passa o pix') || 
+      qLower.includes('mandar o acesso') || 
+      qLower.includes('manda o acesso') || 
+      qLower.includes('como pago') || 
+      qLower.includes('pagar o acesso') || 
+      qLower.includes('pagar a plataforma') || 
+      qLower.includes('cadastrar') || 
+      qLower.includes('assinar')
+    );
+
+    if (wantsToBuy && isProductOrProcessQuestion && !hasExplicitLinkRequest) {
+      wantsToBuy = false;
     }
 
     if (messages.length === 0) {
