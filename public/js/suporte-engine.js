@@ -97,7 +97,17 @@ class SuporteChat {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  async showTypingIndicator(customText = null) {
+  setSubtitleStatus(statusText) {
+    const subtitleEl = document.querySelector('header p');
+    if (!subtitleEl) return;
+    if (statusText === 'typing') {
+      subtitleEl.innerHTML = '<span class="text-emerald-700 font-semibold italic flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-ping"></span> digitando...</span>';
+    } else {
+      subtitleEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse"></span> Online agora';
+    }
+  }
+
+  createTypingIndicatorElement(customText = null) {
     const typingId = 'typing-' + Date.now();
     const typingEl = document.createElement('div');
     typingEl.id = typingId;
@@ -113,11 +123,24 @@ class SuporteChat {
         ${customText ? `<span class="text-xs text-gray-500 font-medium ml-1">${customText}</span>` : ''}
       </div>
     `;
+    this.setSubtitleStatus('typing');
     this.chatContainer.appendChild(typingEl);
     this.scrollToBottom(false);
+    return {
+      element: typingEl,
+      remove: () => {
+        if (typingEl && typingEl.parentNode) {
+          typingEl.remove();
+        }
+        this.setSubtitleStatus('online');
+      }
+    };
+  }
 
-    await this.sleep(1100);
-    typingEl.remove();
+  async showTypingIndicator(customText = null, durationMs = 800) {
+    const typing = this.createTypingIndicatorElement(customText);
+    await this.sleep(durationMs);
+    typing.remove();
   }
 
   renderBotMessage(text) {
@@ -285,7 +308,10 @@ class SuporteChat {
     this.renderUserMessage(question);
     this.playBeepSound();
 
-    await this.showTypingIndicator();
+    if (!this.aiHistory) this.aiHistory = [];
+    this.aiHistory.push({ role: 'user', text: question });
+
+    const liveTyping = this.createTypingIndicatorElement();
 
     try {
       const res = await fetch('/api/suporte/ai/ask', {
@@ -294,7 +320,8 @@ class SuporteChat {
         body: JSON.stringify({
           question: question,
           email: this.buyerData ? this.buyerData.email : '',
-          name: this.buyerData ? this.buyerData.name : ''
+          name: this.buyerData ? this.buyerData.name : '',
+          history: this.aiHistory.slice(-8)
         })
       });
       const data = await res.json();
@@ -302,13 +329,17 @@ class SuporteChat {
         ? data.messages
         : ["Estou aqui para te dar todo suporte! O link para você acessar a plataforma e o Grupo VIP é: https://plataforma-das-fabricas.lovable.app/ ✨"];
 
+      this.aiHistory.push({ role: 'model', text: msgs.join('\n') });
+      liveTyping.remove();
+
       for (let i = 0; i < msgs.length; i++) {
-        if (i > 0) await this.showTypingIndicator();
+        if (i > 0) await this.showTypingIndicator(null, 600 + Math.min(msgs[i].length * 12, 800));
         this.renderBotMessage(msgs[i]);
         this.playBeepSound();
       }
     } catch (err) {
       console.error('Erro na IA de suporte:', err);
+      liveTyping.remove();
       this.renderBotMessage("Tive uma pequena oscilação aqui, mas você pode acessar a plataforma pelo link liberado acima! ✨");
     }
 

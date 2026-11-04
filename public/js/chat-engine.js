@@ -252,29 +252,51 @@ class TypebotChat {
     this.hideInput();
   }
 
-  async showTypingIndicator() {
+  setSubtitleStatus(statusText) {
+    const subtitleEl = document.querySelector('.bot-subtitle-text');
+    if (!subtitleEl) return;
+    if (statusText === 'typing') {
+      subtitleEl.innerHTML = '<span class="text-emerald-700 font-semibold italic flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-ping"></span> digitando...</span>';
+    } else {
+      subtitleEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse"></span> Online agora';
+    }
+  }
+
+  createTypingIndicatorElement() {
     const typingId = 'typing-indicator-' + Date.now();
     const typingEl = document.createElement('div');
     typingEl.id = typingId;
     typingEl.className = 'flex items-end gap-2.5 animate-pop-in max-w-2xl w-full mx-auto mb-2';
+    const avatar = (this.flow && this.flow.settings && this.flow.settings.botAvatar) || '/images/leticia.jpg';
     typingEl.innerHTML = `
-      <img src="${this.flow.settings.botAvatar}" class="w-8 h-8 rounded-full shadow-sm flex-shrink-0 bg-white p-0.5 border border-gray-200 object-cover">
+      <img src="${avatar}" class="w-8 h-8 rounded-full shadow-sm flex-shrink-0 bg-white p-0.5 border border-gray-200 object-cover">
       <div class="bg-white text-gray-800 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm inline-flex items-center gap-1.5 border border-gray-100">
         <span class="typing-dot"></span>
         <span class="typing-dot"></span>
         <span class="typing-dot"></span>
       </div>
     `;
+    this.setSubtitleStatus('typing');
     this.chatContainer.appendChild(typingEl);
     this.scrollToBottom(false);
-
-    return new Promise(resolve => {
-      setTimeout(() => {
+    return {
+      element: typingEl,
+      remove: () => {
         if (typingEl && typingEl.parentNode) {
           typingEl.remove();
         }
+        this.setSubtitleStatus('online');
+      }
+    };
+  }
+
+  async showTypingIndicator(durationMs = 750) {
+    const typing = this.createTypingIndicatorElement();
+    return new Promise(resolve => {
+      setTimeout(() => {
+        typing.remove();
         resolve();
-      }, 700);
+      }, durationMs);
     });
   }
 
@@ -654,7 +676,11 @@ class TypebotChat {
     this.renderUserMessage(question);
     this.playBeepSound();
 
-    await this.showTypingIndicator();
+    if (!this.aiHistory) this.aiHistory = [];
+    this.aiHistory.push({ role: 'user', text: question });
+
+    // Indicador contínuo na tela e no status do topo enquanto a IA processa
+    const liveTyping = this.createTypingIndicatorElement();
 
     try {
       const res = await fetch('/api/ai/ask', {
@@ -664,7 +690,8 @@ class TypebotChat {
           question: question,
           sessionId: this.sessionId,
           answers: this.answers,
-          flowType: (this.flow && this.flow.settings && this.flow.settings.flowType) || (this.isPromo ? 'promocao' : 'normal')
+          flowType: (this.flow && this.flow.settings && this.flow.settings.flowType) || (this.isPromo ? 'promocao' : 'normal'),
+          history: this.aiHistory.slice(-8)
         })
       });
       const data = await res.json();
@@ -672,10 +699,15 @@ class TypebotChat {
         ? data.messages 
         : ["Estou à disposição para te ajudar! Caso queira escolher seu plano e fazer seu cadastro, basta clicar no botão acima ou me mandar sua dúvida por aqui!"];
 
-      // Renderiza as mensagens consecutivas separadas, estilo WhatsApp real
+      this.aiHistory.push({ role: 'model', text: msgs.join('\n') });
+
+      // Remove o indicador contínuo
+      liveTyping.remove();
+
+      // Renderiza as mensagens consecutivas separadas, estilo WhatsApp real com digitação entre elas
       for (let i = 0; i < msgs.length; i++) {
         if (i > 0) {
-          await this.showTypingIndicator();
+          await this.showTypingIndicator(600 + Math.min(msgs[i].length * 12, 800));
         }
         this.renderBotMessage(msgs[i]);
         this.playBeepSound();
@@ -687,6 +719,7 @@ class TypebotChat {
       }
     } catch (err) {
       console.error('Erro na IA:', err);
+      liveTyping.remove();
       this.renderBotMessage("Tive uma pequena oscilação aqui, mas você pode clicar no botão acima para acessar os planos ou digitar sua dúvida novamente! ✨");
     }
 
