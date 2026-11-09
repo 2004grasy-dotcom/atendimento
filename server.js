@@ -280,6 +280,132 @@ app.post('/api/ai/ask', async (req, res) => {
       return res.status(400).json({ error: 'Pergunta vazia' });
     }
 
+    // 1. VERIFICAÇÃO AUTOMÁTICA DE SUPORTE: Se o usuário enviou um e-mail na mensagem
+    const emailMatch = question.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+    if (emailMatch) {
+      const cleanEmail = emailMatch[0].trim().toLowerCase();
+      let compradores = readJSON(COMPRADORES_FILE, []);
+      let comprador = compradores.find(c => c.email && c.email.toLowerCase().trim() === cleanEmail);
+
+      if (!comprador) {
+        const leads = readJSON(LEADS_FILE, []);
+        const lead = leads.find(l => {
+          const leadEmail = (l.email || (l.answers && (l.answers.email || l.answers.e_mail)) || '').toLowerCase().trim();
+          return leadEmail === cleanEmail && (l.clicouCadastro || l.status === 'paid');
+        });
+        if (lead) {
+          comprador = {
+            name: lead.name || (lead.answers && lead.answers.nome) || 'Cliente',
+            email: cleanEmail,
+            product: 'Plataforma + Grupo VIP',
+            paidAt: lead.createdAt || new Date().toISOString()
+          };
+        }
+      }
+
+      // Se encontrou comprador na base dos 2.022 clientes ou leads confirmados
+      if (comprador) {
+        try {
+          const atendimentos = readJSON(SUPORTE_ATENDIMENTOS_FILE, []);
+          let item = atendimentos.find(a => a.email && a.email.toLowerCase().trim() === cleanEmail);
+          if (!item) {
+            item = {
+              id: 'sup_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 4),
+              email: cleanEmail,
+              name: comprador.name || 'Cliente',
+              phone: comprador.phone || '',
+              product: comprador.product || 'Plataforma + Grupo VIP',
+              status: 'Acesso Liberado',
+              encontrado: true,
+              createdAt: new Date().toISOString(),
+              lastAccessAt: new Date().toISOString(),
+              accessCount: 1,
+              questions: [{ q: question.trim(), a: 'Acesso liberado no atendimento principal', date: new Date().toISOString() }]
+            };
+            atendimentos.unshift(item);
+          } else {
+            item.lastAccessAt = new Date().toISOString();
+            item.accessCount = (item.accessCount || 1) + 1;
+            item.status = 'Acesso Liberado';
+            item.encontrado = true;
+            if (!item.questions) item.questions = [];
+            item.questions.push({ q: question.trim(), a: 'Acesso liberado no atendimento principal', date: new Date().toISOString() });
+          }
+          writeJSON(SUPORTE_ATENDIMENTOS_FILE, atendimentos);
+        } catch (e) {
+          console.warn('Erro ao salvar log de suporte:', e.message);
+        }
+
+        if (sessionId) {
+          const leads = readJSON(LEADS_FILE, []);
+          const lead = leads.find(l => l.sessionId === sessionId);
+          if (lead) {
+            if (!lead.answers) lead.answers = {};
+            lead.email = cleanEmail;
+            lead.answers.email = cleanEmail;
+            lead.answers.comprador_confirmado = true;
+            lead.etapaAtual = '🎉 Acesso Liberado no Suporte';
+            lead.updatedAt = new Date().toISOString();
+            writeJSON(LEADS_FILE, leads);
+          }
+        }
+
+        const firstName = comprador.name ? comprador.name.split(' ')[0] : 'querida(o)';
+        return res.json({
+          success: true,
+          access_granted: true,
+          buyer_name: comprador.name || 'Cliente',
+          delivery_link: "https://plataforma-das-fabricas.lovable.app/",
+          messages: [
+            `Oba, ${firstName}! Encontrei seu cadastro aprovado aqui no sistema! 🎉✨`,
+            `Seu acesso à Plataforma e ao Grupo VIP de Fabricantes está 100% liberado! Você pode clicar no botão verde abaixo para entrar agora mesmo:`
+          ]
+        });
+      } else {
+        // E-mail digitado mas não localizado na base de compradores
+        try {
+          const atendimentos = readJSON(SUPORTE_ATENDIMENTOS_FILE, []);
+          let item = atendimentos.find(a => a.email && a.email.toLowerCase().trim() === cleanEmail);
+          if (!item) {
+            atendimentos.unshift({
+              id: 'sup_' + Date.now().toString(36),
+              email: cleanEmail,
+              name: 'Não Localizado',
+              phone: '',
+              product: 'Desconhecido',
+              status: 'E-mail Não Localizado',
+              encontrado: false,
+              createdAt: new Date().toISOString(),
+              lastAccessAt: new Date().toISOString(),
+              accessCount: 1,
+              questions: [{ q: question.trim(), a: 'E-mail não localizado no atendimento principal', date: new Date().toISOString() }]
+            });
+            writeJSON(SUPORTE_ATENDIMENTOS_FILE, atendimentos);
+          }
+        } catch (e) {}
+
+        if (sessionId) {
+          const leads = readJSON(LEADS_FILE, []);
+          const lead = leads.find(l => l.sessionId === sessionId);
+          if (lead) {
+            lead.etapaAtual = `⚠️ E-mail não localizado: ${cleanEmail}`;
+            lead.updatedAt = new Date().toISOString();
+            writeJSON(LEADS_FILE, leads);
+          }
+        }
+
+        return res.json({
+          success: true,
+          access_granted: false,
+          email_not_found: true,
+          messages: [
+            `Procurei pelo e-mail **${cleanEmail}**, mas ainda não encontrei nenhuma compra aprovada no sistema com ele. 🥺`,
+            `Dá uma conferidinha se você digitou certinho ou se usou outro e-mail na hora do pagamento! Se usou outro, pode me mandar ele aqui 👇\n\nOu se preferir, pode enviar seu comprovante no nosso WhatsApp de suporte: (67) 99614-6854.`
+          ]
+        });
+      }
+    }
+
     const isPromo = flowType === 'promocao' || (answers && answers.flowType === 'promocao');
     const flowNormal = readJSON(FLOW_FILE, {});
     const flowPromo = readJSON(FLOW_PROMO_FILE, {});
@@ -316,6 +442,18 @@ CONHECIMENTO COMPLETO:
 - LINK OFICIAL PROMOCIONAL: https://pay.cakto.com.br/32thr3a
 - WHATSAPP: (67) 99614-6854
 
+- ATENDIMENTO A CLIENTES QUE JÁ COMPRARAM (PÓS-VENDA / SUPORTE):
+  * Se a pessoa mencionar que já comprou, já pagou, já é aluna/membro, comprou no Pix/cartão, não consegue acessar, perdeu a senha ou quer entrar na plataforma:
+  * NUNCA tente vender planos ou falar de preço para essa pessoa!
+  * Dê as boas-vindas com muito carinho de pós-venda: comemore que ela é nossa cliente/aluna e peça com simpatia o e-mail que ela usou na compra para você consultar no sistema e liberar o acesso na hora.
+  * Responda em JSON com:
+    "messages": [
+      "Que maravilha! Seja muito bem-vinda(o) à nossa plataforma! ✨",
+      "Para eu localizar seu cadastro aqui no sistema e liberar o seu acesso agora mesmo, digite aqui o **e-mail** que você usou na compra 👇"
+    ],
+    "wants_to_buy": false,
+    "is_support_intent": true
+
 REGRAS OBRIGATÓRIAS DE COMUNICAÇÃO (ESTILO WHATSAPP REAL E HUMANO):
 1. PROIBIDO REPETIR SAUDAÇÃO E O NOME TODA HORA:
    - A conversa já está em andamento! NUNCA comece respostas com "Oi [Nome]!", "Olá [Nome]!", "Tudo bem [Nome]!".
@@ -326,6 +464,7 @@ REGRAS OBRIGATÓRIAS DE COMUNICAÇÃO (ESTILO WHATSAPP REAL E HUMANO):
    - Responda SEMPRE em formato JSON com dois campos:
      * "messages": array de strings com 1 ou 2 mensagens curtas separadas (como duas mensagens consecutivas de WhatsApp, sem textões). NUNCA envie links crus, sites ou URLs nas mensagens de texto, pois o sistema insere o botão oficial na tela apenas quando solicitado.
      * "wants_to_buy": boolean.
+     * "is_support_intent": boolean (true apenas se o cliente já comprou / suporte).
    - NUNCA use sempre a mesma pergunta repetitiva de fechamento ("Deu para entender certinho..."). Varie com naturalidade e espontaneidade:
      * Para perguntas de produtos ou do grupo (ex: 'tem produtos de 10?', 'como compro as roupas do grupo?'): responda de pronto explicando com carinho, sem empurrar botões ou scripts de venda engessados.
      * Quando for falar de preço ou do plano: informe os valores com clareza e faça a ponte de forma leve.
@@ -360,6 +499,18 @@ CONHECIMENTO COMPLETO:
 - LINK OFICIAL: https://plataforma-oficial.lovable.app/
 - WHATSAPP: (67) 99614-6854
 
+- ATENDIMENTO A CLIENTES QUE JÁ COMPRARAM (PÓS-VENDA / SUPORTE):
+  * Se a pessoa mencionar que já comprou, já pagou, já é aluna/membro, comprou no Pix/cartão, não consegue acessar, perdeu a senha ou quer entrar na plataforma:
+  * NUNCA tente vender planos ou falar de preço para essa pessoa!
+  * Dê as boas-vindas com muito carinho de pós-venda: comemore que ela é nossa cliente/aluna e peça com simpatia o e-mail que ela usou na compra para você consultar no sistema e liberar o acesso na hora.
+  * Responda em JSON com:
+    "messages": [
+      "Que maravilha! Seja muito bem-vinda(o) à nossa plataforma! ✨",
+      "Para eu localizar seu cadastro aqui no sistema e liberar o seu acesso agora mesmo, digite aqui o **e-mail** que você usou na compra 👇"
+    ],
+    "wants_to_buy": false,
+    "is_support_intent": true
+
 REGRAS OBRIGATÓRIAS DE COMUNICAÇÃO (ESTILO WHATSAPP REAL E HUMANO):
 1. PROIBIDO REPETIR SAUDAÇÃO E O NOME TODA HORA:
    - A conversa já está em andamento! NUNCA comece respostas com "Oi [Nome]!", "Olá [Nome]!", "Tudo bem [Nome]!".
@@ -370,6 +521,7 @@ REGRAS OBRIGATÓRIAS DE COMUNICAÇÃO (ESTILO WHATSAPP REAL E HUMANO):
    - Responda SEMPRE em formato JSON com dois campos:
      * "messages": array de strings com 1 ou 2 mensagens curtas separadas (como duas mensagens consecutivas de WhatsApp, sem textões). NUNCA envie links crus, sites ou URLs nas mensagens de texto, pois o sistema insere o botão oficial na tela apenas quando solicitado.
      * "wants_to_buy": boolean.
+     * "is_support_intent": boolean (true apenas se o cliente já comprou / suporte).
    - NUNCA use sempre a mesma pergunta repetitiva de fechamento ("Deu para entender certinho..."). Varie com naturalidade e espontaneidade:
      * Para perguntas de produtos ou do grupo (ex: 'tem produtos de 10?', 'como compro as roupas do grupo?'): responda de pronto explicando com carinho, sem empurrar botões ou scripts de venda engessados.
      * Se o cliente perguntou o preço dos planos: informe claramente o Plano Essencial (R$ 49,90) e o Plano Pro (R$ 127,90) e tire eventuais dúvidas de forma acolhedora.
@@ -384,6 +536,7 @@ REGRAS OBRIGATÓRIAS DE COMUNICAÇÃO (ESTILO WHATSAPP REAL E HUMANO):
     let aiData = null;
     let messages = [];
     let wantsToBuy = false;
+    let isSupportIntent = false;
 
     if (!apiKey) {
       console.warn('⚠️ [Leticia AI] Nenhuma GEMINI_API_KEY configurada nas variáveis de ambiente nem nas configurações do painel admin.');
@@ -450,13 +603,47 @@ REGRAS OBRIGATÓRIAS DE COMUNICAÇÃO (ESTILO WHATSAPP REAL E HUMANO):
           messages = [parsed.messages];
         }
         wantsToBuy = !!parsed.wants_to_buy;
+        isSupportIntent = !!parsed.is_support_intent;
       } catch (e) {
         messages = [aiData.candidates[0].content.parts[0].text];
       }
     }
 
-    // Regra mandatória: o botão/link SÓ deve ser exibido quando o cliente solicitar explicitamente o link ou acesso à plataforma!
+    // Identificação de intenção de suporte/pós-venda
     const qLower = question.toLowerCase().trim();
+    const isSupportPhrase = (
+      qLower.includes('já comprei') || qLower.includes('ja comprei') ||
+      qLower.includes('já paguei') || qLower.includes('ja paguei') ||
+      qLower.includes('já sou aluna') || qLower.includes('ja sou aluna') ||
+      qLower.includes('já sou cliente') || qLower.includes('ja sou cliente') ||
+      qLower.includes('já sou membro') || qLower.includes('ja sou membro') ||
+      qLower.includes('não consigo acessar') || qLower.includes('nao consigo acessar') ||
+      qLower.includes('não recebi o acesso') || qLower.includes('nao recebi o acesso') ||
+      qLower.includes('não recebi o login') || qLower.includes('nao recebi o login') ||
+      qLower.includes('não recebi a senha') || qLower.includes('nao recebi a senha') ||
+      qLower.includes('comprei a plataforma') || qLower.includes('comprei o acesso') ||
+      qLower.includes('já fiz o pix') || qLower.includes('ja fiz o pix') ||
+      qLower.includes('fiz o pix e não recebi') || qLower.includes('fiz o pix e nao recebi') ||
+      qLower.includes('onde vejo as aulas') || qLower.includes('como entro na plataforma') ||
+      qLower.includes('libera meu acesso') || qLower.includes('liberar meu acesso') ||
+      qLower.includes('onde eu acesso') || qLower.includes('onde pego meu acesso')
+    );
+
+    if (isSupportPhrase) {
+      isSupportIntent = true;
+    }
+
+    if (isSupportIntent) {
+      wantsToBuy = false;
+      if (messages.length === 0 || !messages.some(m => m.toLowerCase().includes('e-mail') || m.toLowerCase().includes('email'))) {
+        messages = [
+          "Que maravilha! Seja muito bem-vinda(o) à nossa plataforma! ✨",
+          "Para eu localizar seu cadastro aqui no sistema e liberar o seu acesso agora mesmo, digite aqui o **e-mail** que você usou na compra 👇"
+        ];
+      }
+    }
+
+    // Regra mandatória: o botão/link SÓ deve ser exibido quando o cliente solicitar explicitamente o link ou acesso à plataforma!
     const isProductOrProcessQuestion = (
       qLower.includes('grupo') || 
       qLower.includes('roupa') || 
@@ -498,7 +685,9 @@ REGRAS OBRIGATÓRIAS DE COMUNICAÇÃO (ESTILO WHATSAPP REAL E HUMANO):
         if (!lead.answers) lead.answers = {};
         const qCount = Object.keys(lead.answers).filter(k => k.startsWith('duvida_ia_')).length + 1;
         lead.answers[`duvida_ia_${qCount}`] = question.trim();
-        if (wantsToBuy) {
+        if (isSupportIntent) {
+          lead.etapaAtual = `🆘 Pediu suporte pós-venda: "${question.trim().substring(0, 30)}..."`;
+        } else if (wantsToBuy) {
           lead.answers['solicitou_link_compra'] = true;
           lead.etapaAtual = '🔥 Pediu link de compra na IA';
         } else {
@@ -509,7 +698,7 @@ REGRAS OBRIGATÓRIAS DE COMUNICAÇÃO (ESTILO WHATSAPP REAL E HUMANO):
       }
     }
 
-    res.json({ success: true, messages, wants_to_buy: wantsToBuy });
+    res.json({ success: true, messages, wants_to_buy: wantsToBuy, is_support_intent: isSupportIntent });
   } catch (err) {
     console.error('Erro na rota /api/ai/ask:', err);
     res.status(500).json({ error: 'Erro ao processar resposta da IA: ' + err.message });

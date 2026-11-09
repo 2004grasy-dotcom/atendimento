@@ -713,8 +713,12 @@ class TypebotChat {
         this.playBeepSound();
       }
 
-      // Se a IA detectou intenção de compra ou pedido do link, renderiza o botão oficial de cadastro clicável!
-      if (data.wants_to_buy) {
+      // Se o cliente forneceu o e-mail de compra e foi liberado o acesso:
+      if (data.access_granted && data.delivery_link) {
+        this.renderAccessCard(data.buyer_name || 'Cliente', data.delivery_link);
+      } else if (data.is_support_intent || data.email_not_found) {
+        this.textInput.placeholder = 'Digite aqui o seu e-mail de compra...';
+      } else if (data.wants_to_buy) {
         this.renderBuyActionButtons();
       }
     } catch (err) {
@@ -724,6 +728,41 @@ class TypebotChat {
     }
 
     this.textInput.focus();
+  }
+
+  renderAccessCard(buyerName, deliveryLink) {
+    const cardEl = document.createElement('div');
+    cardEl.className = 'pl-10 pr-2 my-4 animate-pop-in max-w-2xl w-full mx-auto';
+    cardEl.innerHTML = `
+      <div class="bg-gradient-to-br from-emerald-50 to-white border-2 border-emerald-400 rounded-2xl p-5 shadow-md">
+        <div class="flex items-center gap-3 mb-3">
+          <div class="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 text-xl font-bold">
+            🔑
+          </div>
+          <div>
+            <h3 class="font-bold text-gray-900 text-base">Acesso Liberado com Sucesso!</h3>
+            <p class="text-xs text-emerald-700 font-medium">Plataforma Oficial + Grupo VIP</p>
+          </div>
+        </div>
+        <p class="text-sm text-gray-600 mb-4 leading-relaxed">
+          Olá, <strong class="text-gray-900">${this.escapeHtml(buyerName)}</strong>! Clique no botão abaixo para entrar na plataforma e começar a comprar direto das fábricas:
+        </p>
+        <a 
+          href="${this.escapeHtml(deliveryLink)}" 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 px-6 rounded-xl shadow-lg hover:shadow-emerald-500/30 transition-all flex items-center justify-between text-base group cursor-pointer transform hover:-translate-y-0.5"
+        >
+          <span class="flex items-center gap-2">
+            <span class="text-xl">🚀</span>
+            <span>Acessar Plataforma & Grupo VIP</span>
+          </span>
+          <svg class="w-5 h-5 text-white/90 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+        </a>
+      </div>
+    `;
+    this.chatContainer.appendChild(cardEl);
+    this.scrollToBottom(true);
   }
 
   renderBuyActionButtons() {
