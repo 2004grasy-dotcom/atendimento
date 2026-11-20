@@ -303,8 +303,19 @@ app.post('/api/ai/ask', async (req, res) => {
         }
       }
 
-      // Se encontrou comprador na base dos 2.022 clientes ou leads confirmados
+      // Se encontrou comprador na base dos clientes ou leads confirmados
       if (comprador) {
+        if (comprador.status === 'refunded' || comprador.status === 'canceled' || comprador.status === 'chargeback') {
+          const firstName = comprador.name ? comprador.name.split(' ')[0] : 'tudo bem';
+          return res.json({
+            success: true,
+            access_granted: false,
+            messages: [
+              `Olá, ${firstName}! Localizei o seu cadastro aqui, porém consta no sistema que a sua compra foi cancelada ou reembolsada.`,
+              `Se você cancelou recentemente ou se acredita ter sido algum engano, pode nos chamar no suporte ou refazer sua inscrição!`
+            ]
+          });
+        }
         try {
           const atendimentos = readJSON(SUPORTE_ATENDIMENTOS_FILE, []);
           let item = atendimentos.find(a => a.email && a.email.toLowerCase().trim() === cleanEmail);
@@ -753,115 +764,150 @@ app.get(['/api/webhooks/lastlink', '/api/webhooks/last-link', '/api/webhooks/cac
 app.post(['/api/webhooks/lastlink', '/api/webhooks/last-link', '/api/webhooks/cactus', '/api/webhooks/cakto', '/api/webhooks'], (req, res) => {
   try {
     const payload = req.body || {};
-    console.log('📦 Webhook recebido:', JSON.stringify(payload).substring(0, 300));
+    const eventName = String(payload.Event || payload.event || payload.eventType || payload.type || '').trim();
+    const isTest = Boolean(payload.IsTest || payload.isTest || payload.test);
+    console.log(`📦 Webhook recebido: Evento="${eventName}", IsTest=${isTest}`);
 
-    // Se for teste ou verificação de webhook (ex: Lastlink testando conexão)
-    if (payload.test || payload.event === 'ping' || payload.event === 'test' || !payload || Object.keys(payload).length === 0) {
+    // Se for teste ou verificação de webhook sem payload útil (ex: ping)
+    if (eventName === 'ping' || eventName === 'test' || !payload || Object.keys(payload).length === 0) {
       return res.status(200).json({ success: true, message: 'Webhook Lastlink ativo e respondendo com sucesso!' });
     }
 
     const compradores = readJSON(COMPRADORES_FILE, []);
-    let novosCompradores = 0;
+    let alterados = 0;
 
-    // A Lastlink ou Cakto podem enviar req.body.data como array de itens ou como objeto único
-    const items = Array.isArray(payload.data) ? payload.data : (payload.data ? [payload.data] : [payload]);
+    // Normaliza objeto de dados (Lastlink envia Data em PascalCase com Buyer, Member, Products, etc.)
+    const dataObj = payload.Data || payload.data || payload;
+    const items = Array.isArray(dataObj) ? dataObj : [dataObj];
 
     items.forEach(item => {
-      const customer = item.customer || item.buyer || item.comprador || item.client || payload.customer || payload.buyer || payload.comprador || {};
-      const product = item.product || payload.product || item.plan || payload.plan || {};
-      
-      const email = (
-        customer.email || 
-        customer.mail || 
-        item.email || 
-        payload.email || 
-        item.buyer_email || 
-        payload.buyer_email || 
+      const buyerObj = item.Buyer || item.buyer || 
+                       item.Member || item.member || 
+                       item.Customer || item.customer || 
+                       item.Comprador || item.comprador || 
+                       item.Client || item.client || 
+                       payload.Buyer || payload.buyer || 
+                       payload.Customer || payload.customer || 
+                       item;
+
+      const email = String(
+        buyerObj.Email || buyerObj.email || 
+        buyerObj.Mail || buyerObj.mail || 
+        item.Email || item.email || 
+        payload.Email || payload.email || 
+        item.buyer_email || payload.buyer_email || 
         ''
       ).trim().toLowerCase();
 
-      const name = (
-        customer.name || 
-        customer.nome || 
-        item.name || 
-        item.nome || 
-        payload.name || 
-        payload.nome || 
+      const name = String(
+        buyerObj.Name || buyerObj.name || 
+        buyerObj.Nome || buyerObj.nome || 
+        item.Name || item.name || 
+        payload.Name || payload.name || 
         'Cliente'
       ).trim();
 
-      const phone = (
-        customer.phone || 
-        customer.cellphone || 
-        customer.telefone || 
-        customer.whatsapp || 
-        item.phone || 
-        payload.phone || 
+      const phone = String(
+        buyerObj.Phone || buyerObj.phone || 
+        buyerObj.Cellphone || buyerObj.cellphone || 
+        buyerObj.Telefone || buyerObj.telefone || 
+        buyerObj.Whatsapp || buyerObj.whatsapp || 
+        item.Phone || item.phone || 
+        payload.Phone || payload.phone || 
         ''
       ).trim();
 
-      const productName = (
-        product.name || 
-        product.title || 
-        product.nome || 
-        item.product_name || 
-        payload.product_name || 
-        'Plataforma de Fabricantes'
-      ).trim();
+      // Extrai nome do produto
+      let productName = 'Plataforma de Fornecedores + Grupo VIP';
+      if (Array.isArray(item.Products) && item.Products.length > 0) {
+        productName = item.Products[0].Name || item.Products[0].name || productName;
+      } else if (Array.isArray(payload.Products) && payload.Products.length > 0) {
+        productName = payload.Products[0].Name || payload.Products[0].name || productName;
+      } else if (item.Product) {
+        productName = item.Product.Name || item.Product.name || productName;
+      } else if (item.product) {
+        productName = item.product.name || item.product.title || productName;
+      } else if (payload.Product || payload.product) {
+        const p = payload.Product || payload.product;
+        productName = p.Name || p.name || productName;
+      }
 
-      const status = String(
-        item.status || 
-        payload.status || 
-        payload.event || 
-        payload.transaction_status || 
-        item.transaction_status || 
-        'paid'
-      ).toLowerCase();
+      const eventLower = eventName.toLowerCase();
+      const statusLower = String(item.Status || item.status || payload.Status || payload.status || item.transaction_status || '').toLowerCase();
+      const actionLower = String(item.Action || item.action || payload.Action || payload.action || '').toLowerCase();
 
-      const event = String(payload.event || payload.eventType || payload.type || '').toLowerCase();
-
-      // Somente registra se for pago / aprovado / completo
+      // Eventos de aprovação / liberação de acesso
       const isApproved = 
-        status.includes('paid') || 
-        status.includes('aprov') || 
-        status.includes('complete') || 
-        status.includes('completa') || 
-        status.includes('pago') || 
-        status.includes('succeeded') || 
-        status.includes('active') || 
-        event.includes('approved') || 
-        event.includes('aprov') || 
-        event.includes('complete') || 
-        event.includes('paid') || 
-        event.includes('compra completa') || 
-        event.includes('compra aprovada');
+        eventLower.includes('confirmed') || 
+        eventLower.includes('started') || 
+        eventLower.includes('approved') || 
+        eventLower.includes('aprov') || 
+        eventLower.includes('paid') || 
+        eventLower.includes('complete') || 
+        (eventLower.includes('product_access') && actionLower === 'add') || 
+        statusLower.includes('aprov') || 
+        statusLower.includes('paid') || 
+        statusLower.includes('pago') || 
+        statusLower.includes('succeeded') || 
+        statusLower.includes('active');
 
-      if (email && isApproved) {
-        const existingIdx = compradores.findIndex(c => c.email.toLowerCase() === email);
-        const buyerData = {
-          id: item.id || payload.id || 'compra_' + Date.now().toString(36),
-          name: name,
-          email: email,
-          phone: phone,
-          product: productName,
-          status: 'paid',
-          amount: item.amount || payload.amount || 29.90,
-          paidAt: item.paidAt || payload.date || new Date().toISOString(),
-          createdAt: existingIdx >= 0 ? compradores[existingIdx].createdAt : new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          source: 'lastlink'
-        };
+      // Eventos de cancelamento / reembolso / revogação de acesso
+      const isRevocation = 
+        eventLower.includes('refund') || 
+        eventLower.includes('chargeback') || 
+        eventLower.includes('canceled') || 
+        eventLower.includes('cancelled') || 
+        eventLower.includes('ended') || 
+        eventLower.includes('expired') || 
+        (eventLower.includes('product_access') && actionLower === 'remove') || 
+        statusLower.includes('refund') || 
+        statusLower.includes('chargeback') || 
+        statusLower.includes('cancel');
 
-        if (existingIdx >= 0) {
-          compradores[existingIdx] = buyerData;
-        } else {
-          compradores.unshift(buyerData);
+      if (email) {
+        const existingIdx = compradores.findIndex(c => c.email && c.email.toLowerCase() === email);
+
+        if (isRevocation) {
+          // Marca status como cancelado/reembolsado para revogar acesso
+          if (existingIdx >= 0) {
+            compradores[existingIdx].status = 'refunded';
+            compradores[existingIdx].updatedAt = new Date().toISOString();
+            alterados++;
+            console.log(`🚫 Acesso revogado por reembolso/cancelamento: ${email}`);
+          }
+        } else if (isApproved) {
+          if (isTest) {
+            console.log(`🧪 Evento de teste validado com sucesso: ${email}`);
+          } else {
+            const buyerData = {
+              id: item.Id || item.id || payload.Id || payload.id || 'compra_' + Date.now().toString(36),
+              name: name,
+              email: email,
+              phone: phone,
+              product: productName,
+              status: 'paid',
+              amount: item.Price || item.price || item.Amount || item.amount || payload.Amount || payload.amount || 29.90,
+              paidAt: item.CreatedAt || item.createdAt || payload.CreatedAt || payload.createdAt || new Date().toISOString(),
+              createdAt: existingIdx >= 0 ? compradores[existingIdx].createdAt : new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              source: 'lastlink'
+            };
+
+            if (existingIdx >= 0) {
+              compradores[existingIdx] = buyerData;
+            } else {
+              compradores.unshift(buyerData);
+            }
+            alterados++;
+            console.log(`✅ Nova compra aprovada registrada da Lastlink: ${email} (${name})`);
+          }
         }
-        novosCompradores++;
       }
     });
 
-    writeJSON(COMPRADORES_FILE, compradores);
+    if (alterados > 0) {
+      writeJSON(COMPRADORES_FILE, compradores);
+    }
 
     // Sincronização automática entre os dois serviços (atendimento <-> suporte)
     if (!req.headers['x-forwarded-sync']) {
@@ -874,7 +920,7 @@ app.post(['/api/webhooks/lastlink', '/api/webhooks/last-link', '/api/webhooks/ca
       }).catch(err => console.warn('Sync webhook aviso:', err.message));
     }
 
-    res.status(200).json({ success: true, message: `${novosCompradores} comprador(es) registrado(s) com sucesso.` });
+    res.status(200).json({ success: true, message: `${alterados} alteração(ões) de comprador processada(s) com sucesso.` });
   } catch (err) {
     console.error('Erro ao processar webhook:', err);
     res.status(500).json({ error: 'Erro ao processar webhook: ' + err.message });
@@ -937,6 +983,14 @@ app.post('/api/suporte/verificar', async (req, res) => {
       } catch (remoteErr) {
         console.warn('Consulta remota fallback:', remoteErr.message);
       }
+    }
+
+    if (comprador && (comprador.status === 'refunded' || comprador.status === 'canceled' || comprador.status === 'chargeback')) {
+      return res.json({
+        success: true,
+        encontrado: false,
+        message: "Identificamos que esta compra foi reembolsada ou cancelada. O acesso está inativo."
+      });
     }
 
     // Registra o atendimento no painel exclusivo de suporte
