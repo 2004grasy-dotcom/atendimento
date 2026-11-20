@@ -439,7 +439,7 @@ CONHECIMENTO COMPLETO:
   * REGRA MANDATÓRIA DE VALORES: Se o cliente perguntar o preço, valor ou quanto custa, NUNCA mande ele olhar no link! É OBRIGATÓRIO informar com todas as letras na resposta o valor promocional exato: por apenas R$ 29,90 no pagamento único!
 - PAGAMENTO: Cartão de crédito ou Pix com liberação imediata.
 - ACESSO: Login e senha chegam na hora por e-mail e o suporte chama no WhatsApp para dar as boas-vindas.
-- LINK OFICIAL PROMOCIONAL: https://pay.cakto.com.br/32thr3a
+- LINK OFICIAL PROMOCIONAL: https://lastlink.com/p/C7A556515/checkout-payment/
 - WHATSAPP: (67) 99614-6854
 
 - ATENDIMENTO A CLIENTES QUE JÁ COMPRARAM (PÓS-VENDA / SUPORTE):
