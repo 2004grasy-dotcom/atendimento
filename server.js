@@ -744,44 +744,112 @@ app.get('/api/export/csv', (req, res) => {
 });
 
 // ==========================================
-// INTEGRAÇÃO CACTUS / CAKTO WEBHOOKS
+// INTEGRAÇÃO LASTLINK / CACTUS / CAKTO WEBHOOKS
 // ==========================================
-app.post('/api/webhooks/cactus', (req, res) => {
+app.get(['/api/webhooks/lastlink', '/api/webhooks/last-link', '/api/webhooks/cactus'], (req, res) => {
+  res.status(200).json({ success: true, message: 'Webhook endpoint online e pronto para receber notificações.' });
+});
+
+app.post(['/api/webhooks/lastlink', '/api/webhooks/last-link', '/api/webhooks/cactus', '/api/webhooks/cakto', '/api/webhooks'], (req, res) => {
   try {
     const payload = req.body || {};
-    console.log('📦 Webhook recebido da Cactus/Cakto: Evento =', payload.event);
+    console.log('📦 Webhook recebido:', JSON.stringify(payload).substring(0, 300));
+
+    // Se for teste ou verificação de webhook (ex: Lastlink testando conexão)
+    if (payload.test || payload.event === 'ping' || payload.event === 'test' || !payload || Object.keys(payload).length === 0) {
+      return res.status(200).json({ success: true, message: 'Webhook Lastlink ativo e respondendo com sucesso!' });
+    }
 
     const compradores = readJSON(COMPRADORES_FILE, []);
     let novosCompradores = 0;
 
-    // A Cakto envia req.body.data como array de itens ou como objeto único
+    // A Lastlink ou Cakto podem enviar req.body.data como array de itens ou como objeto único
     const items = Array.isArray(payload.data) ? payload.data : (payload.data ? [payload.data] : [payload]);
 
     items.forEach(item => {
-      const customer = item.customer || {};
-      const product = item.product || {};
-      const email = (customer.email || item.email || '').trim().toLowerCase();
-      const name = (customer.name || item.name || 'Cliente').trim();
-      const phone = (customer.phone || item.phone || '').trim();
-      const productName = (product.name || item.product_name || 'Plataforma de Fornecedores').trim();
-      const status = (item.status || payload.event || 'paid').toLowerCase();
+      const customer = item.customer || item.buyer || item.comprador || item.client || payload.customer || payload.buyer || payload.comprador || {};
+      const product = item.product || payload.product || item.plan || payload.plan || {};
+      
+      const email = (
+        customer.email || 
+        customer.mail || 
+        item.email || 
+        payload.email || 
+        item.buyer_email || 
+        payload.buyer_email || 
+        ''
+      ).trim().toLowerCase();
 
-      // Somente registra se for pago / aprovado
-      const isApproved = status.includes('paid') || status.includes('aprov') || payload.event === 'purchase_approved';
+      const name = (
+        customer.name || 
+        customer.nome || 
+        item.name || 
+        item.nome || 
+        payload.name || 
+        payload.nome || 
+        'Cliente'
+      ).trim();
+
+      const phone = (
+        customer.phone || 
+        customer.cellphone || 
+        customer.telefone || 
+        customer.whatsapp || 
+        item.phone || 
+        payload.phone || 
+        ''
+      ).trim();
+
+      const productName = (
+        product.name || 
+        product.title || 
+        product.nome || 
+        item.product_name || 
+        payload.product_name || 
+        'Plataforma de Fabricantes'
+      ).trim();
+
+      const status = String(
+        item.status || 
+        payload.status || 
+        payload.event || 
+        payload.transaction_status || 
+        item.transaction_status || 
+        'paid'
+      ).toLowerCase();
+
+      const event = String(payload.event || payload.eventType || payload.type || '').toLowerCase();
+
+      // Somente registra se for pago / aprovado / completo
+      const isApproved = 
+        status.includes('paid') || 
+        status.includes('aprov') || 
+        status.includes('complete') || 
+        status.includes('completa') || 
+        status.includes('pago') || 
+        status.includes('succeeded') || 
+        status.includes('active') || 
+        event.includes('approved') || 
+        event.includes('aprov') || 
+        event.includes('complete') || 
+        event.includes('paid') || 
+        event.includes('compra completa') || 
+        event.includes('compra aprovada');
 
       if (email && isApproved) {
         const existingIdx = compradores.findIndex(c => c.email.toLowerCase() === email);
         const buyerData = {
-          id: item.id || 'compra_' + Date.now().toString(36),
+          id: item.id || payload.id || 'compra_' + Date.now().toString(36),
           name: name,
           email: email,
           phone: phone,
           product: productName,
           status: 'paid',
-          amount: item.amount || 0,
-          paidAt: item.paidAt || new Date().toISOString(),
+          amount: item.amount || payload.amount || 29.90,
+          paidAt: item.paidAt || payload.date || new Date().toISOString(),
           createdAt: existingIdx >= 0 ? compradores[existingIdx].createdAt : new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+          updatedAt: new Date().toISOString(),
+          source: 'lastlink'
         };
 
         if (existingIdx >= 0) {
@@ -799,7 +867,7 @@ app.post('/api/webhooks/cactus', (req, res) => {
     if (!req.headers['x-forwarded-sync']) {
       const isSuporte = req.hostname && req.hostname.toLowerCase().includes('suporte');
       const targetHost = isSuporte ? 'https://atendimento-leticia.up.railway.app' : 'https://suporte-leticia.up.railway.app';
-      fetch(`${targetHost}/api/webhooks/cactus`, {
+      fetch(`${targetHost}/api/webhooks/lastlink`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-forwarded-sync': 'true' },
         body: JSON.stringify(payload)
@@ -808,7 +876,7 @@ app.post('/api/webhooks/cactus', (req, res) => {
 
     res.status(200).json({ success: true, message: `${novosCompradores} comprador(es) registrado(s) com sucesso.` });
   } catch (err) {
-    console.error('Erro ao processar webhook Cactus:', err);
+    console.error('Erro ao processar webhook:', err);
     res.status(500).json({ error: 'Erro ao processar webhook: ' + err.message });
   }
 });
