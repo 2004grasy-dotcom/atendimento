@@ -7,7 +7,7 @@
     "bubbleColor": "#F3F4F6",
     "bubbleTextColor": "#1F2937",
     "companyWhatsapp": "5567996146854",
-    "checkoutUrl": "https://lastlink.com/p/C7A556515/checkout-payment/",
+    "checkoutUrl": "https://pay.kiwify.com.br/JgprI1a",
     "checkoutButtonText": "💳 Acessar Cadastro Promocional (R$ 29,90)",
     "flowType": "promocao",
     "promoPrice": "R$ 29,90",
@@ -155,7 +155,7 @@
         {
           "id": "opt_cakto_promo",
           "label": "💳 Acessar Cadastro Promocional (R$ 29,90)",
-          "url": "https://lastlink.com/p/C7A556515/checkout-payment/",
+          "url": "https://pay.kiwify.com.br/JgprI1a",
           "nextStepId": "step_final_instrucoes"
         }
       ]
