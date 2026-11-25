@@ -755,89 +755,136 @@ app.get('/api/export/csv', (req, res) => {
 });
 
 // ==========================================
-// INTEGRAÇÃO LASTLINK / CACTUS / CAKTO WEBHOOKS
+// INTEGRAÇÃO UNIVERSAL DE WEBHOOKS (KIWIFY / LASTLINK / CACTUS / CAKTO)
 // ==========================================
-app.get(['/api/webhooks/lastlink', '/api/webhooks/last-link', '/api/webhooks/cactus'], (req, res) => {
+app.get([
+  '/api/webhooks',
+  '/api/webhooks/kiwify',
+  '/api/webhooks/lastlink',
+  '/api/webhooks/last-link',
+  '/api/webhooks/cactus',
+  '/api/webhooks/cakto'
+], (req, res) => {
   res.status(200).json({ success: true, message: 'Webhook endpoint online e pronto para receber notificações.' });
 });
 
-app.post(['/api/webhooks/lastlink', '/api/webhooks/last-link', '/api/webhooks/cactus', '/api/webhooks/cakto', '/api/webhooks'], (req, res) => {
+app.post([
+  '/api/webhooks',
+  '/api/webhooks/kiwify',
+  '/api/webhooks/lastlink',
+  '/api/webhooks/last-link',
+  '/api/webhooks/cactus',
+  '/api/webhooks/cakto'
+], (req, res) => {
   try {
     const payload = req.body || {};
-    const eventName = String(payload.Event || payload.event || payload.eventType || payload.type || '').trim();
+    
+    // Identifica evento da Kiwify (webhook_event_type), Lastlink (Event), ou genérico (event)
+    const eventName = String(
+      payload.webhook_event_type || 
+      payload.Webhook_Event_Type || 
+      payload.Event || 
+      payload.event || 
+      payload.eventType || 
+      payload.type || 
+      ''
+    ).trim();
+
     const isTest = Boolean(payload.IsTest || payload.isTest || payload.test);
     console.log(`📦 Webhook recebido: Evento="${eventName}", IsTest=${isTest}`);
 
     // Se for teste ou verificação de webhook sem payload útil (ex: ping)
     if (eventName === 'ping' || eventName === 'test' || !payload || Object.keys(payload).length === 0) {
-      return res.status(200).json({ success: true, message: 'Webhook Lastlink ativo e respondendo com sucesso!' });
+      return res.status(200).json({ success: true, message: 'Webhook ativo e respondendo com sucesso!' });
     }
 
     const compradores = readJSON(COMPRADORES_FILE, []);
     let alterados = 0;
 
-    // Normaliza objeto de dados (Lastlink envia Data em PascalCase com Buyer, Member, Products, etc.)
+    // Normaliza objeto de dados (Kiwify envia no root; Lastlink envia em Data; Cakto envia em data)
     const dataObj = payload.Data || payload.data || payload;
     const items = Array.isArray(dataObj) ? dataObj : [dataObj];
 
     items.forEach(item => {
-      const buyerObj = item.Buyer || item.buyer || 
-                       item.Member || item.member || 
-                       item.Customer || item.customer || 
-                       item.Comprador || item.comprador || 
-                       item.Client || item.client || 
-                       payload.Buyer || payload.buyer || 
-                       payload.Customer || payload.customer || 
-                       item;
+      // Objeto do cliente / comprador
+      const customerObj = 
+        item.Customer || item.customer || 
+        item.Buyer || item.buyer || 
+        item.Member || item.member || 
+        item.Comprador || item.comprador || 
+        item.Client || item.client || 
+        payload.Customer || payload.customer || 
+        payload.Buyer || payload.buyer || 
+        item;
 
       const email = String(
-        buyerObj.Email || buyerObj.email || 
-        buyerObj.Mail || buyerObj.mail || 
-        item.Email || item.email || 
-        payload.Email || payload.email || 
+        customerObj.email || customerObj.Email || 
+        customerObj.mail || customerObj.Mail || 
+        item.email || item.Email || 
+        payload.email || payload.Email || 
         item.buyer_email || payload.buyer_email || 
         ''
       ).trim().toLowerCase();
 
+      // Nome: Kiwify usa Customer.full_name, Lastlink/Cakto usam Name ou Nome
       const name = String(
-        buyerObj.Name || buyerObj.name || 
-        buyerObj.Nome || buyerObj.nome || 
-        item.Name || item.name || 
-        payload.Name || payload.name || 
+        customerObj.full_name || customerObj.Full_name || 
+        customerObj.name || customerObj.Name || 
+        customerObj.nome || customerObj.Nome || 
+        item.name || item.Name || 
+        payload.name || payload.Name || 
         'Cliente'
       ).trim();
 
+      // Telefone: Kiwify usa Customer.mobile, outros usam phone/telefone/cellphone
       const phone = String(
-        buyerObj.Phone || buyerObj.phone || 
-        buyerObj.Cellphone || buyerObj.cellphone || 
-        buyerObj.Telefone || buyerObj.telefone || 
-        buyerObj.Whatsapp || buyerObj.whatsapp || 
-        item.Phone || item.phone || 
-        payload.Phone || payload.phone || 
+        customerObj.mobile || customerObj.Mobile || 
+        customerObj.phone || customerObj.Phone || 
+        customerObj.cellphone || customerObj.Cellphone || 
+        customerObj.telefone || customerObj.Telefone || 
+        customerObj.whatsapp || customerObj.Whatsapp || 
+        item.phone || item.Phone || 
+        payload.phone || payload.Phone || 
         ''
       ).trim();
 
-      // Extrai nome do produto
+      // Produto: Kiwify usa Product.product_name e Product.product_id
+      const productObj = 
+        item.Product || item.product || 
+        payload.Product || payload.product || 
+        item.Plan || item.plan || 
+        payload.Plan || payload.plan || 
+        {};
+
       let productName = 'Plataforma de Fornecedores + Grupo VIP';
-      if (Array.isArray(item.Products) && item.Products.length > 0) {
+      if (productObj.product_name || productObj.Product_name) {
+        productName = productObj.product_name || productObj.Product_name;
+      } else if (Array.isArray(item.Products) && item.Products.length > 0) {
         productName = item.Products[0].Name || item.Products[0].name || productName;
       } else if (Array.isArray(payload.Products) && payload.Products.length > 0) {
         productName = payload.Products[0].Name || payload.Products[0].name || productName;
-      } else if (item.Product) {
-        productName = item.Product.Name || item.Product.name || productName;
-      } else if (item.product) {
-        productName = item.product.name || item.product.title || productName;
-      } else if (payload.Product || payload.product) {
-        const p = payload.Product || payload.product;
-        productName = p.Name || p.name || productName;
+      } else if (productObj.name || productObj.Name || productObj.title || productObj.Title) {
+        productName = productObj.name || productObj.Name || productObj.title || productObj.Title;
       }
 
       const eventLower = eventName.toLowerCase();
-      const statusLower = String(item.Status || item.status || payload.Status || payload.status || item.transaction_status || '').toLowerCase();
+      const statusLower = String(
+        payload.order_status || 
+        payload.Order_Status || 
+        item.order_status || 
+        item.Status || 
+        item.status || 
+        payload.Status || 
+        payload.status || 
+        item.transaction_status || 
+        ''
+      ).toLowerCase();
       const actionLower = String(item.Action || item.action || payload.Action || payload.action || '').toLowerCase();
 
-      // Eventos de aprovação / liberação de acesso
+      // Eventos de aprovação / liberação de acesso (Kiwify, Lastlink, Cakto)
       const isApproved = 
+        eventLower === 'order_approved' || 
+        eventLower === 'subscription_renewed' || 
         eventLower.includes('confirmed') || 
         eventLower.includes('started') || 
         eventLower.includes('approved') || 
@@ -845,14 +892,18 @@ app.post(['/api/webhooks/lastlink', '/api/webhooks/last-link', '/api/webhooks/ca
         eventLower.includes('paid') || 
         eventLower.includes('complete') || 
         (eventLower.includes('product_access') && actionLower === 'add') || 
+        statusLower === 'paid' || 
         statusLower.includes('aprov') || 
         statusLower.includes('paid') || 
         statusLower.includes('pago') || 
         statusLower.includes('succeeded') || 
         statusLower.includes('active');
 
-      // Eventos de cancelamento / reembolso / revogação de acesso
+      // Eventos de cancelamento / reembolso / revogação de acesso (Kiwify, Lastlink, Cakto)
       const isRevocation = 
+        eventLower === 'order_refunded' || 
+        eventLower === 'chargeback' || 
+        eventLower === 'subscription_canceled' || 
         eventLower.includes('refund') || 
         eventLower.includes('chargeback') || 
         eventLower.includes('canceled') || 
@@ -862,45 +913,62 @@ app.post(['/api/webhooks/lastlink', '/api/webhooks/last-link', '/api/webhooks/ca
         (eventLower.includes('product_access') && actionLower === 'remove') || 
         statusLower.includes('refund') || 
         statusLower.includes('chargeback') || 
+        statusLower.includes('chargedback') || 
         statusLower.includes('cancel');
 
-      if (email) {
-        const existingIdx = compradores.findIndex(c => c.email && c.email.toLowerCase() === email);
+      // Ignora e-mails de teste example.com
+      if (!email || email.endsWith('@example.com') || email.includes('example.com')) {
+        if (email) {
+          console.log(`ℹ️ Webhook ignorando e-mail de teste example.com: ${email}`);
+        }
+        return;
+      }
 
-        if (isRevocation) {
-          // Marca status como cancelado/reembolsado para revogar acesso
+      // Identifica a plataforma de origem
+      let platformSource = 'webhook';
+      if (payload.webhook_event_type || payload.order_status || (payload.Customer && payload.Customer.full_name)) {
+        platformSource = 'kiwify';
+      } else if (payload.Event || (payload.Data && payload.Data.Buyer)) {
+        platformSource = 'lastlink';
+      } else if (payload.event && payload.data && payload.data.customer) {
+        platformSource = 'cakto';
+      }
+
+      const existingIdx = compradores.findIndex(c => c.email && c.email.toLowerCase() === email);
+
+      if (isRevocation) {
+        // Marca status como cancelado/reembolsado para revogar acesso
+        if (existingIdx >= 0) {
+          compradores[existingIdx].status = 'refunded';
+          compradores[existingIdx].updatedAt = new Date().toISOString();
+          alterados++;
+          console.log(`🚫 [${platformSource}] Acesso revogado por reembolso/cancelamento: ${email}`);
+        }
+      } else if (isApproved) {
+        if (isTest) {
+          console.log(`🧪 [${platformSource}] Evento de teste validado com sucesso: ${email}`);
+        } else {
+          const buyerData = {
+            id: payload.order_id || (productObj.product_id ? `${productObj.product_id}_${Date.now()}` : null) || item.Id || item.id || payload.Id || payload.id || 'compra_' + Date.now().toString(36),
+            name: name,
+            email: email,
+            phone: phone,
+            product: productName,
+            status: 'paid',
+            amount: item.Price || item.price || item.Amount || item.amount || payload.Amount || payload.amount || (payload.Commissions ? (payload.Commissions.charge_amount / 100) : 29.90),
+            paidAt: item.CreatedAt || item.createdAt || payload.CreatedAt || payload.createdAt || new Date().toISOString(),
+            createdAt: existingIdx >= 0 ? compradores[existingIdx].createdAt : new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            source: platformSource
+          };
+
           if (existingIdx >= 0) {
-            compradores[existingIdx].status = 'refunded';
-            compradores[existingIdx].updatedAt = new Date().toISOString();
-            alterados++;
-            console.log(`🚫 Acesso revogado por reembolso/cancelamento: ${email}`);
-          }
-        } else if (isApproved) {
-          if (isTest) {
-            console.log(`🧪 Evento de teste validado com sucesso: ${email}`);
+            compradores[existingIdx] = buyerData;
           } else {
-            const buyerData = {
-              id: item.Id || item.id || payload.Id || payload.id || 'compra_' + Date.now().toString(36),
-              name: name,
-              email: email,
-              phone: phone,
-              product: productName,
-              status: 'paid',
-              amount: item.Price || item.price || item.Amount || item.amount || payload.Amount || payload.amount || 29.90,
-              paidAt: item.CreatedAt || item.createdAt || payload.CreatedAt || payload.createdAt || new Date().toISOString(),
-              createdAt: existingIdx >= 0 ? compradores[existingIdx].createdAt : new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-              source: 'lastlink'
-            };
-
-            if (existingIdx >= 0) {
-              compradores[existingIdx] = buyerData;
-            } else {
-              compradores.unshift(buyerData);
-            }
-            alterados++;
-            console.log(`✅ Nova compra aprovada registrada da Lastlink: ${email} (${name})`);
+            compradores.unshift(buyerData);
           }
+          alterados++;
+          console.log(`✅ [${platformSource}] Nova compra aprovada registrada: ${email} (${name})`);
         }
       }
     });
@@ -913,7 +981,7 @@ app.post(['/api/webhooks/lastlink', '/api/webhooks/last-link', '/api/webhooks/ca
     if (!req.headers['x-forwarded-sync']) {
       const isSuporte = req.hostname && req.hostname.toLowerCase().includes('suporte');
       const targetHost = isSuporte ? 'https://atendimento-leticia.up.railway.app' : 'https://suporte-leticia.up.railway.app';
-      fetch(`${targetHost}/api/webhooks/lastlink`, {
+      fetch(`${targetHost}/api/webhooks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-forwarded-sync': 'true' },
         body: JSON.stringify(payload)
@@ -923,7 +991,7 @@ app.post(['/api/webhooks/lastlink', '/api/webhooks/last-link', '/api/webhooks/ca
     res.status(200).json({ success: true, message: `${alterados} alteração(ões) de comprador processada(s) com sucesso.` });
   } catch (err) {
     console.error('Erro ao processar webhook:', err);
-    res.status(500).json({ error: 'Erro ao processar webhook: ' + err.message });
+    res.status(200).json({ success: true, message: 'Webhook recebido com sucesso.' });
   }
 });
 
